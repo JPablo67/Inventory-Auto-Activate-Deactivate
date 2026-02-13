@@ -197,8 +197,8 @@ export default function ActivityLogPage() {
                                             let actionLabel = log.action;
                                             let badgeTone: "success" | "critical" | "info" | "attention" | "magic" = "info";
 
-                                            if (log.action === 'AUTO-DEACTIVATE') { actionLabel = 'Deactivated'; badgeTone = 'info'; }
-                                            else if (log.action === 'DEACTIVATE') { actionLabel = 'Deactivated'; badgeTone = 'info'; }
+                                            if (log.action === 'AUTO-DEACTIVATE') { actionLabel = 'Changed to Draft'; badgeTone = 'info'; }
+                                            else if (log.action === 'DEACTIVATE') { actionLabel = 'Changed to Draft'; badgeTone = 'info'; }
                                             else if (log.action === 'REACTIVATE') { actionLabel = 'Reactivated'; badgeTone = 'success'; }
 
                                             // Method Label

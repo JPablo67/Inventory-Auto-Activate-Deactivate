@@ -186,7 +186,8 @@ export default function SettingsPage() {
 
                             <InlineStack align="space-between" blockAlign="center">
                                 <BlockStack gap="200">
-                                    <Text as="h2" variant="headingMd">Auto-Deactivate Configuration</Text>
+                                    <Text as="h2" variant="headingMd">Auto-Deactivate Configuration (Draft Mode)</Text>
+                                    <Badge tone="info">Non-Destructive</Badge>
                                     <Text as="p" tone={autoEnabled === 'true' ? 'success' : 'subdued'}>
                                         {autoEnabled === 'true' ? 'Active & Running' : 'Disabled'}
                                     </Text>
@@ -255,7 +256,7 @@ export default function SettingsPage() {
                                 <Layout>
                                     <Layout.Section variant="oneHalf">
                                         <TextField
-                                            label="Deactivate products inactive for more than"
+                                            label="Deactivate (Change to Draft) products that have been out of stock for more than:"
                                             type="number"
                                             value={autoMinDays}
                                             onChange={setAutoMinDays}

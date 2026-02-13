@@ -193,7 +193,7 @@ export default function ManualScanPage() {
 
     useEffect(() => {
         if ((actionData as any)?.deactivatedCount) {
-            shopify.toast.show(`${(actionData as any).deactivatedCount} products deactivated`);
+            shopify.toast.show(`${(actionData as any).deactivatedCount} products changed to Draft`);
             clearCandidateSelection();
         }
     }, [actionData, shopify]);
@@ -243,7 +243,7 @@ export default function ManualScanPage() {
                 {product.sku}
             </IndexTable.Cell>
             <IndexTable.Cell>
-                <Badge tone="critical">{product.daysInactive?.toString()} days inactive</Badge>
+                <Badge tone="critical">{`${product.daysInactive?.toString()} days inactive`}</Badge>
             </IndexTable.Cell>
             <IndexTable.Cell>Active</IndexTable.Cell>
         </IndexTable.Row>
@@ -260,7 +260,8 @@ export default function ManualScanPage() {
                                     Scan for Old Stock
                                 </Text>
                                 <Text variant="bodyMd" as="p" tone="subdued">
-                                    Identify and deactivate products that have been out of stock for a long time.
+                                    Identify and set to Draft products that have been out of stock for a long time.
+                                    Products are never deleted.
                                 </Text>
                                 {typedSettings?.lastRunAt && (
                                     <div style={{ marginTop: '0.5rem' }}>
@@ -304,8 +305,8 @@ export default function ManualScanPage() {
                             <BlockStack gap="400">
                                 <Banner tone={isReadonly ? "info" : "warning"}>
                                     {isReadonly
-                                        ? `Last Auto-Scan deactivated ${visibleItems.length} products.`
-                                        : `Found ${visibleItems.length} products eligible for deactivation. Select products to archive.`
+                                        ? `Last Auto-Scan moved ${visibleItems.length} products to Draft.`
+                                        : `Found ${visibleItems.length} products eligible for Draft mode. Select to process.`
                                     }
                                 </Banner>
                                 <IndexTable
@@ -325,7 +326,7 @@ export default function ManualScanPage() {
                                     ]}
                                     promotedBulkActions={isReadonly ? [] : [
                                         {
-                                            content: 'Deactivate Selected',
+                                            content: 'Change to Draft',
                                             onAction: handleDeactivate,
                                             // @ts-expect-error loading sometimes mismatches in types
                                             loading: isDeactivating
@@ -383,8 +384,8 @@ export default function ManualScanPage() {
                                     // Action Label
                                     let actionLabel = log.action;
                                     let badgeTone: "success" | "critical" | "info" | "attention" | "magic" = "info";
-                                    if (log.action === 'AUTO-DEACTIVATE') { actionLabel = 'Deactivated'; badgeTone = 'info'; }
-                                    else if (log.action === 'DEACTIVATE') { actionLabel = 'Deactivated'; badgeTone = 'info'; }
+                                    if (log.action === 'AUTO-DEACTIVATE') { actionLabel = 'Drafted'; badgeTone = 'info'; }
+                                    else if (log.action === 'DEACTIVATE') { actionLabel = 'Drafted'; badgeTone = 'info'; }
                                     else if (log.action === 'REACTIVATE') { actionLabel = 'Reactivated'; badgeTone = 'success'; }
 
                                     // Method Label

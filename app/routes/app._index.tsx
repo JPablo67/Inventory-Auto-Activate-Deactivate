@@ -308,7 +308,7 @@ export default function Index() {
 
   useEffect(() => {
     if ((actionData as any)?.deactivatedCount) {
-      shopify.toast.show(`${(actionData as any).deactivatedCount} products deactivated`);
+      shopify.toast.show(`${(actionData as any).deactivatedCount} products changed to Draft`);
       clearCandidateSelection();
     }
   }, [actionData, shopify]);

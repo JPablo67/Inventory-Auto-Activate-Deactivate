@@ -1,6 +1,6 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "847e31236029b652ff2dbc0761f59bac"
+client_id = "548448e6f1165198dd8333f2d1157cc7"
 name = "Auto Hide Out of Stock"
 application_url = "https://example.com"
 embedded = true

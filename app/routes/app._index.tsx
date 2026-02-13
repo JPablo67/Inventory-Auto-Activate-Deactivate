@@ -43,27 +43,35 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const view = url.searchParams.get("view"); // 'active', 'draft', 'archived'
 
   // 1. Fetch Metrics (Always needed for the top bar if we want it persistent, or just for dashboard)
-  let stats = { active: 0, draft: 0, archived: 0 };
+  let stats = { active: 0, draft: 0, archived: 0, activeNoStock: 0, inactiveWithStock: 0 };
   let productList = [];
 
   if (!view) {
-    const queries = ["active", "draft", "archived"].map((status) =>
+    const queries = [
+      { label: "active", query: "status:active" },
+      { label: "draft", query: "status:draft" },
+      { label: "archived", query: "status:archived" },
+      { label: "activeNoStock", query: "status:active AND inventory_total:<=0" },
+      { label: "inactiveWithStock", query: "(status:draft OR status:archived) AND inventory_total:>0" }
+    ].map((item) =>
       admin.graphql(
         `query CountProducts($query: String) {
             productsCount(query: $query) {
               count
             }
           }`,
-        { variables: { query: `status:${status}` } }
+        { variables: { query: item.query } }
       ).then(res => res.json())
     );
 
-    const [activeRes, draftRes, archivedRes] = await Promise.all(queries);
+    const results = await Promise.all(queries);
 
     stats = {
-      active: (activeRes as any).data?.productsCount?.count || 0,
-      draft: (draftRes as any).data?.productsCount?.count || 0,
-      archived: (archivedRes as any).data?.productsCount?.count || 0,
+      active: (results[0] as any).data?.productsCount?.count || 0,
+      draft: (results[1] as any).data?.productsCount?.count || 0,
+      archived: (results[2] as any).data?.productsCount?.count || 0,
+      activeNoStock: (results[3] as any).data?.productsCount?.count || 0,
+      inactiveWithStock: (results[4] as any).data?.productsCount?.count || 0,
     };
   } else {
     // If we are in a view, fetch the products
@@ -526,6 +534,8 @@ export default function Index() {
               {renderStatusCard(stats.active, "Active Products", "active")}
               {renderStatusCard(stats.draft, "Drafts", "draft")}
               {renderStatusCard(stats.archived, "Archived", "archived")}
+              {renderStatusCard(stats.activeNoStock, "Active (No Stock)", "activeNoStock")}
+              {renderStatusCard(stats.inactiveWithStock, "Inactive (Has Stock)", "inactiveWithStock")}
             </div>
           </Layout.Section>
         </Layout>
@@ -533,265 +543,17 @@ export default function Index() {
         <Layout>
           <Layout.Section>
             <Card>
-              <BlockStack gap="500">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-                  <BlockStack gap="200">
-                    <Text as="h2" variant="headingMd">
-                      Scan for Old Stock
-                    </Text>
-                    <Text variant="bodyMd" as="p" tone="subdued">
-                      Identify and deactivate products that have been out of stock for a long time.
-                    </Text>
-                    {typedSettings?.lastRunAt && (
-                      <div style={{ marginTop: '0.5rem' }}>
-                        <BlockStack gap="100">
-                          <Text as="span" variant="bodySm" tone="subdued">Last Scan:</Text>
-                          <InlineStack gap="200" align="start" blockAlign="center">
-                            <Text as="span" variant="bodyMd" fontWeight="bold">
-                              {new Date(typedSettings.lastRunAt).toLocaleString()}
-                            </Text>
-                            <Badge tone={typedSettings.lastScanType === 'AUTO' ? 'magic' : 'attention'}>
-                              {typedSettings.lastScanType === 'AUTO' ? 'Auto-Scan' : 'Manual Scan'}
-                            </Badge>
-                          </InlineStack>
-                        </BlockStack>
-                      </div>
-                    )}
-                  </BlockStack>
-                  <InlineStack gap="300" align="end">
-                    <div style={{ width: "150px" }}>
-                      <TextField
-                        label="Days Inactive"
-                        type="number"
-                        value={daysThreshold}
-                        onChange={(value) => setDaysThreshold(value)}
-                        autoComplete="off"
-                        labelHidden
-                        placeholder="Threshold"
-                        suffix="days"
-                        helpText="Older than"
-                      />
-                    </div>
-                    <Box paddingBlockStart="050">
-                      <Button variant="primary" onClick={handleScan} loading={isScanning} disabled={isDeactivating}>
-                        Scan Now
-                      </Button>
-                    </Box>
-                  </InlineStack>
-                </div>
-
-                {visibleItems.length > 0 && (
-                  <BlockStack gap="400">
-                    <Banner tone={isReadonly ? "info" : "warning"}>
-                      {isReadonly
-                        ? `Last Auto-Scan deactivated ${visibleItems.length} products.`
-                        : `Found ${visibleItems.length} products eligible for deactivation. Select products to archive.`
-                      }
-                    </Banner>
-                    <IndexTable
-                      resourceName={{ singular: 'product', plural: 'products' }}
-                      itemCount={visibleItems.length}
-                      selectedItemsCount={
-                        allCandidatesSelected ? 'All' : selectedCandidates.length
-                      }
-                      onSelectionChange={handleCandidateSelection}
-                      selectable={!isReadonly}
-                      headings={[
-                        { title: 'Image' },
-                        { title: 'Product' },
-                        { title: 'SKU' },
-                        { title: 'Inactive Time' },
-                        { title: 'Status' },
-                      ]}
-                      promotedBulkActions={isReadonly ? [] : [
-                        {
-                          content: 'Deactivate Selected',
-                          onAction: handleDeactivate,
-                          // @ts-expect-error loading sometimes mismatches in types
-                          loading: isDeactivating
-                        },
-                      ]}
-                    >
-                      {visibleItems.map(renderCandidateRow)}
-                    </IndexTable>
-                  </BlockStack>
-                )}
-
-                {actionData && (actionData as any).candidates && (actionData as any).candidates.length === 0 && (
-                  <Banner tone="success">
-                    No old stock found! Your inventory is healthy.
-                  </Banner>
-                )}
-
+              <BlockStack gap="400">
+                <Text as="h2" variant="headingMd">Welcome to Inventory Deactivator</Text>
+                <Text as="p" variant="bodyMd">
+                  Your automated assistant for keeping inventory clean and organized.
+                </Text>
+                <InlineStack gap="300">
+                  <Button url="/app/manual">Go to Manual Scan</Button>
+                  <Button url="/app/settings">Configure Auto-Deactivate</Button>
+                </InlineStack>
               </BlockStack>
             </Card>
-          </Layout.Section>
-
-          <Layout.Section variant="oneThird">
-            <BlockStack gap="500">
-              {/* Settings Card */}
-              <Card>
-                <BlockStack gap="400">
-                  <InlineStack align="space-between">
-                    <Text as="h2" variant="headingMd">Auto-Deactivate</Text>
-                    <Checkbox
-                      label="Enable"
-                      labelHidden
-                      checked={autoEnabled === 'true'}
-                      onChange={handleToggleAuto}
-                    // Use a toggle switch style if available via props or custom CSS,
-                    // but standard Checkbox is the cleanest Polaris option for "Switch" in this context without extra deps.
-                    // Actually, Polaris has a 'tone' or we can just use the toggle boolean.
-                    />
-                  </InlineStack>
-
-                  <Text as="p" tone={autoEnabled === 'true' ? 'success' : 'subdued'}>
-                    Status: {autoEnabled === 'true' ? 'Active' : 'Disabled'}
-                  </Text>
-
-                  {timeLeft && autoEnabled === 'true' && (
-                    <div style={{ background: "var(--p-surface-subdued)", borderRadius: "8px", padding: "10px" }}>
-                      <BlockStack gap="200">
-                        <InlineStack align="space-between">
-                          <Text as="span" variant="bodySm" tone="subdued">Next Run</Text>
-                          <Text as="span" variant="bodySm" fontWeight="bold">{timeLeft}</Text>
-                        </InlineStack>
-                        {/* Progress bar visual */}
-                        <ProgressBar progress={progress} size="small" tone="success" />
-                      </BlockStack>
-                    </div>
-                  )}
-
-                  <BlockStack gap="300">
-                    <TextField
-                      label="Deactivate products after"
-                      type="number"
-                      value={autoMinDays}
-                      onChange={setAutoMinDays}
-                      autoComplete="off"
-                      disabled={autoEnabled === 'true'}
-                      suffix="days"
-                      helpText="Inactive threshold"
-                    />
-
-                    <TextField
-                      label="Run Scan Every"
-                      type="number"
-                      value={frequency}
-                      onChange={setFrequency}
-                      autoComplete="off"
-                      disabled={autoEnabled === 'true'}
-                      connectedRight={
-                        <Select
-                          label="Unit"
-                          labelHidden
-                          options={[
-                            { label: 'Days', value: 'days' },
-                            { label: 'Minutes', value: 'minutes' },
-                          ]}
-                          value={frequencyUnit}
-                          onChange={setFrequencyUnit}
-                          disabled={autoEnabled === 'true'}
-                        />
-                      }
-                    />
-                  </BlockStack>
-                </BlockStack>
-              </Card>
-
-              <Card>
-                <BlockStack gap="300">
-                  <InlineStack align="space-between">
-                    <Text as="h2" variant="headingMd">
-                      Recent Activity
-                    </Text>
-                    {logs.length > 0 && (
-                      <Button variant="plain" tone="critical" onClick={handleClearLogs}>
-                        Clear History
-                      </Button>
-                    )}
-                  </InlineStack>
-                  {logs.length === 0 ? (
-                    <Text as="p" tone="subdued">No activity yet.</Text>
-                  ) : (
-                    <IndexTable
-                      resourceName={{ singular: 'log', plural: 'logs' }}
-                      itemCount={logs.length}
-                      selectedItemsCount={0}
-                      onSelectionChange={() => { }}
-                      headings={[
-                        { title: 'Date & Time' },
-                        { title: 'Action' },
-                        { title: 'Method' },
-                        { title: 'SKU' },
-                        { title: 'Name' },
-                        { title: 'ID' },
-                      ]}
-                      selectable={false}
-                    >
-                      {logs.map((log: any, index: number) => {
-                        const product = log.productDetails;
-                        const dateStr = new Date(log.createdAt).toLocaleString();
-
-                        // Action Label
-                        let actionLabel = log.action;
-                        let badgeTone: "success" | "critical" | "info" | "attention" | "magic" = "info";
-                        if (log.action === 'AUTO-DEACTIVATE') { actionLabel = 'Deactivated'; badgeTone = 'info'; }
-                        else if (log.action === 'DEACTIVATE') { actionLabel = 'Deactivated'; badgeTone = 'info'; }
-                        else if (log.action === 'REACTIVATE') { actionLabel = 'Reactivated'; badgeTone = 'success'; }
-
-                        // Method Label
-                        let methodLabel = log.method;
-
-                        // Normalize Webhook/Auto to "Auto"
-                        if (methodLabel === 'WEBHOOK' || methodLabel === 'AUTO') {
-                          methodLabel = 'Auto';
-                        } else if (methodLabel === 'MANUAL') {
-                          methodLabel = 'Manual';
-                        }
-
-                        // Fallback for old logs
-                        if (!methodLabel) {
-                          if (log.action === 'AUTO-DEACTIVATE' || log.action === 'REACTIVATE') methodLabel = 'Auto';
-                          else methodLabel = 'Manual';
-                        }
-
-                        const methodTone = methodLabel === 'Auto' ? 'magic' : 'info';
-
-
-                        // SKU & Name
-                        const sku = log.productSku || product?.variants?.nodes?.[0]?.sku || "-";
-                        const name = log.productTitle || product?.title || "Unknown Product";
-                        const id = log.productId;
-
-                        return (
-                          <IndexTable.Row id={log.id.toString()} key={log.id} position={index}>
-                            <IndexTable.Cell>
-                              {dateStr}
-                            </IndexTable.Cell>
-                            <IndexTable.Cell>
-                              <Badge tone={badgeTone}>{actionLabel}</Badge>
-                            </IndexTable.Cell>
-                            <IndexTable.Cell>
-                              <Badge tone={methodTone}>{methodLabel}</Badge>
-                            </IndexTable.Cell>
-                            <IndexTable.Cell>
-                              <Text variant="bodySm" as="span" fontWeight="bold">{sku}</Text>
-                            </IndexTable.Cell>
-                            <IndexTable.Cell>
-                              <Text variant="bodyMd" as="span">{name}</Text>
-                            </IndexTable.Cell>
-                            <IndexTable.Cell>
-                              <Text variant="bodySm" as="span" tone="subdued">{id.split("/").pop()}</Text>
-                            </IndexTable.Cell>
-                          </IndexTable.Row>
-                        );
-                      })}
-                    </IndexTable>
-                  )}
-                </BlockStack>
-              </Card>
-            </BlockStack>
           </Layout.Section>
         </Layout>
       </BlockStack>

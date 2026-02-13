@@ -55,6 +55,7 @@ model Settings {
   lastRunAt       DateTime?
   lastScanType    String?  // "AUTO" or "MANUAL"
   lastScanResults String?  // JSON string of products found/actioned
+  currentStatus   String   @default("IDLE") // "IDLE", "SCANNING", "DEACTIVATING"
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

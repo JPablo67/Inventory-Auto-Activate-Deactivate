@@ -135,7 +135,7 @@ export async function scanOldProducts(request: Request, minDaysInactive: number 
     cursor = pageInfo.endCursor;
 
     // Safety break to prevent infinite loops in dev
-    if (candidates.length > 500) hasNextPage = false;
+    if (candidates.length > 5000) hasNextPage = false;
   }
 
   return candidates;
@@ -176,6 +176,13 @@ export async function deactivateProducts(request: Request, productIds: string[])
 export async function getProductsByStatus(request: Request, status: string) {
   const { admin } = await shopify.authenticate.admin(request);
 
+  let queryString = `status:${status}`;
+  if (status === 'activeNoStock') {
+    queryString = "status:active AND inventory_total:<=0";
+  } else if (status === 'inactiveWithStock') {
+    queryString = "(status:draft OR status:archived) AND inventory_total:>0";
+  }
+
   const query = `
     query getProducts($query: String!) {
       products(first: 50, query: $query) {
@@ -199,7 +206,7 @@ export async function getProductsByStatus(request: Request, status: string) {
     }
   `;
 
-  const response = await admin.graphql(query, { variables: { query: `status:${status}` } });
+  const response = await admin.graphql(query, { variables: { query: queryString } });
   const responseJson: any = await response.json();
 
   return (responseJson as any).data?.products?.nodes || [];

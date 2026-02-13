@@ -2,19 +2,47 @@ import db from "../db.server";
 import { scanOldProducts, deactivateProducts } from "./inventory.server";
 import shopify from "../shopify.server";
 
-let schedulerStarted = false;
+declare global {
+    var __schedulerInterval: NodeJS.Timeout | undefined;
+    var __isScanning: boolean;
+}
+
+type Logger = (message: string, isError?: boolean) => void;
 
 export function initScheduler() {
-    if (schedulerStarted) return;
-    schedulerStarted = true;
+    if (global.__schedulerInterval) {
+        return;
+    }
 
-    console.log("[Scheduler] Initialized background scanner.");
+    console.log("[Scheduler] Initializing background scanner...");
+    scheduleNextRun();
+}
 
-    // Run every minute
-    setInterval(runAutoScan, 60 * 1000);
+function scheduleNextRun() {
+    // Clear existing to be safe
+    if (global.__schedulerInterval) clearTimeout(global.__schedulerInterval);
+
+    global.__schedulerInterval = setTimeout(async () => {
+        if (global.__isScanning) {
+            console.log("[Scheduler] Skip - Scan already in progress.");
+            scheduleNextRun();
+            return;
+        }
+
+        global.__isScanning = true;
+        try {
+            await runAutoScan();
+        } catch (error) {
+            console.error("[Scheduler] Error in scan loop:", error);
+        } finally {
+            global.__isScanning = false;
+            scheduleNextRun();
+        }
+    }, 30 * 1000);
 }
 
 async function runAutoScan() {
+    console.log(`[Scheduler] Tick - ${new Date().toISOString()}`);
     try {
         const now = new Date();
 
@@ -24,20 +52,44 @@ async function runAutoScan() {
             where: { isActive: true }
         });
 
+        if (settingsList.length > 0) {
+            console.log(`[Scheduler] Found ${settingsList.length} active shops.`);
+        }
+
         for (const settings of settingsList) {
             if (shouldRun(settings, now)) {
                 console.log(`[Scheduler] Running auto-scan for ${settings.shop}`);
-                const deactivatedItems = await executeScanForShop(settings.shop, settings.minDaysInactive);
 
-                // Update lastRunAt and Type
+                // Set Status: SCANNING
                 await db.settings.update({
                     where: { shop: settings.shop },
-                    data: {
-                        lastRunAt: now,
-                        lastScanType: 'AUTO',
-                        lastScanResults: JSON.stringify(deactivatedItems || [])
-                    }
+                    data: { currentStatus: "Running Scan..." }
                 });
+
+                try {
+                    const deactivatedItems = await executeScanForShop(settings.shop, settings.minDaysInactive);
+
+                    // Update lastRunAt, Type, and IDLE
+                    await db.settings.update({
+                        where: { shop: settings.shop },
+                        data: {
+                            lastRunAt: now,
+                            lastScanType: 'AUTO',
+                            lastScanResults: JSON.stringify(deactivatedItems || []),
+                            currentStatus: "IDLE"
+                        }
+                    });
+                } catch (err) {
+                    console.error(`[Scheduler] Error processing ${settings.shop}`, err);
+                    // Ensure IDLE on error
+                    await db.settings.update({
+                        where: { shop: settings.shop },
+                        data: { currentStatus: "IDLE" }
+                    });
+                }
+            } else {
+                // Log why skipped? Too verbose? Maybe only if needed.
+                // console.log(`[Scheduler] Skipping ${settings.shop} - Not due yet.`);
             }
         }
     } catch (error) {
@@ -45,106 +97,36 @@ async function runAutoScan() {
     }
 }
 
-function shouldRun(settings: any, now: Date): boolean {
+function shouldRun(settings: any, now: Date) {
+    if (!settings.isActive) return false;
+    // If never run, run now
     if (!settings.lastRunAt) return true;
 
-    const lastRun = new Date(settings.lastRunAt).getTime();
-    const current = now.getTime();
-    const diffMs = current - lastRun;
+    const lastRun = new Date(settings.lastRunAt);
+    const nextRun = new Date(lastRun);
 
-    let frequencyMs = 0;
-    if (settings.frequencyUnit === "minutes") {
-        frequencyMs = settings.frequency * 60 * 1000;
-    } else {
-        // days
-        frequencyMs = settings.frequency * 24 * 60 * 60 * 1000;
+    if (settings.frequencyUnit === 'minutes') {
+        nextRun.setMinutes(lastRun.getMinutes() + settings.frequency);
+    } else { // days
+        nextRun.setDate(lastRun.getDate() + settings.frequency);
     }
 
-    return diffMs >= frequencyMs;
+    return now >= nextRun;
 }
 
 async function executeScanForShop(shop: string, minDays: number) {
+    console.log(`[Scheduler] Executing scan for ${shop}...`);
     try {
-        // Use unauthenticated.admin for background tasks
         const { admin } = await shopify.unauthenticated.admin(shop);
-
-        // Wrap to match client interface expected by scanAndDeactivate
-        // Or refactor scanAndDeactivate. For least disturbance, I'll wrap here.
-        const client = {
-            request: async (query: string, options: any) => {
-                const response = await admin.graphql(query, options);
-                const json = await response.json();
-                return { body: json };
-            }
-        };
-
-        const deactivatedItems = await scanAndDeactivate(client, shop, minDays);
-        return deactivatedItems;
-
+        return await scanAndDeactivate(admin, shop, minDays);
     } catch (error) {
-        console.error(`[Scheduler] Error executing scan for ${shop}:`, error);
-        return [];
+        console.error(`[Scheduler] Failed to authenticate scanner for ${shop}:`, error);
+        throw error;
     }
 }
 
-// Helper to log to console or array
-type Logger = (msg: string, isError?: boolean) => void;
-
-export async function executeDebugScan(shop: string, admin?: any): Promise<string[]> {
-    const logs: string[] = [];
-    const logger: Logger = (msg, isError) => {
-        logs.push(msg);
-        if (isError) console.error(msg);
-        else console.log(msg);
-    };
-
-    logger(`Starting debug scan for ${shop}`);
-
-    // DEBUG: Check shopify object
-    try {
-        logger(`Shopify keys: ${Object.keys(shopify).join(', ')}`);
-        if ((shopify as any).api) {
-            logger(`Shopify API keys: ${Object.keys((shopify as any).api).join(', ')}`);
-        } else {
-            logger(`Shopify.api is undefined!`);
-        }
-    } catch (e) {
-        logger(`Error checking shopify object: ${e}`);
-    }
-
-    // 1. Fetch settings to get minDays
-    const settings = await db.settings.findUnique({ where: { shop } });
-    if (!settings) {
-        logger("No settings found", true);
-        return logs;
-    }
-    logger(`Settings found: minDaysInactive=${settings.minDaysInactive}`);
-
-    let adminClient;
-
-    if (admin) {
-        logger("Using provided Admin context (Online/Debug)");
-        // The provided adminContext is already the Remix-style admin object
-        adminClient = admin;
-    } else {
-        // 2. Get Admin API client (Offline / Background)
-        logger("Attempting to get Offline Admin API client via unauthenticated.admin...");
-
-        try {
-            const { admin: backgroundAdmin } = await shopify.unauthenticated.admin(shop);
-            adminClient = backgroundAdmin;
-        } catch (error) {
-            logger(`Failed to get unauthenticated admin client: ${error}`, true);
-            return logs;
-        }
-    }
-
-    const deactivatedItems = await scanAndDeactivate(adminClient, shop, settings.minDaysInactive);
-    // Also run with logger for server logs?
-    // For now, the first call logs to console.log as default.
-
-    return deactivatedItems || []; // Return for debug logs if needed, but mainly for type safety
-
+export async function executeDebugScan(shop: string, minDays: number) {
+    return executeScanForShop(shop, minDays);
 }
 
 
@@ -182,13 +164,15 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
     const candidates: any[] = []; // Store full objects to return
     let productsChecked = 0;
 
+    // Ensure status is Running Scan (in case called from Debug)
+    // await db.settings.update({ where: { shop }, data: { currentStatus: "Running Scan..." } }); 
+
     while (hasNextPage) {
         try {
-            const response = await client.request(query, { variables: { cursor } });
+            const response: any = await client.graphql(query, { variables: { cursor } });
+            const responseJson: any = await response.json();
 
-            // Handle different client response structures
-            const responseBody = response.body || response;
-            const data = responseBody.data;
+            const data = responseJson.data;
 
             if (!data || !data.products) {
                 logger(`[Scheduler] No data in response for ${shop}`, true);
@@ -227,7 +211,7 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
                     const daysInactive = Math.floor(diff / (1000 * 60 * 60 * 24));
 
                     if (diff > cutoffMs) {
-                        logger(`[Scheduler] MARKING FOR DEACTIVATION: ${product.title} (ID: ${product.id})`);
+                        // logger(`[Scheduler] MARKING FOR DEACTIVATION: ${product.title} (ID: ${product.id})`);
                         (product as any).daysInactive = daysInactive;
                         candidates.push(product);
                     }
@@ -248,24 +232,36 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
     const deactivatedItems: any[] = [];
 
     // 2. Deactivate
+    // 2. Deactivate
     if (candidates.length > 0) {
+        const total = candidates.length;
+        let processed = 0;
+
+        // UPDATE STATUS
+        await db.settings.update({
+            where: { shop },
+            data: { currentStatus: `Deactivating: 0/${total} items...` }
+        });
+
         for (const product of candidates) {
+            // Check Stop Condition
+            const freshSettings = await db.settings.findUnique({ where: { shop }, select: { isActive: true } });
+            if (!freshSettings?.isActive) {
+                logger(`[Scheduler] Process stopped manually for ${shop}.`);
+                break;
+            }
+
             const id = product.id;
             try {
                 logger(`[Scheduler] Deactivating ${id}...`);
 
                 // Add tag
-                const tagResponse = await client.request(`mutation addTags($id: ID!) { tagsAdd(id: $id, tags: ["auto-archived-oos"]) { userErrors { field message } } }`, { variables: { id } });
-                const tagData = tagResponse.body?.data || tagResponse.data;
-                if (tagData?.tagsAdd?.userErrors?.length > 0) {
-                    logger(`[Scheduler] Error adding tag to ${id}: ${JSON.stringify(tagData.tagsAdd.userErrors)}`, true);
-                    // Skip deactivation if tagging fails? Or proceed? Proceeding risks reactivation issues. Skipping is safer.
-                    // Actually let's just log and try deactivate.
-                }
+                await client.graphql(`mutation addTags($id: ID!) { tagsAdd(id: $id, tags: ["auto-archived-oos"]) { userErrors { field message } } }`, { variables: { id } });
 
                 // Set Draft
-                const updateResponse = await client.request(`mutation setDraft($id: ID!) { productUpdate(input: {id: $id, status: DRAFT}) { userErrors { field message } } }`, { variables: { id } });
-                const updateData = updateResponse.body?.data || updateResponse.data;
+                const updateResponse = await client.graphql(`mutation setDraft($id: ID!) { productUpdate(input: {id: $id, status: DRAFT}) { userErrors { field message } } }`, { variables: { id } });
+                const updateJson = await updateResponse.json();
+                const updateData = updateJson.data;
 
                 if (updateData?.productUpdate?.userErrors?.length > 0) {
                     logger(`[Scheduler] Error setting ${id} to DRAFT: ${JSON.stringify(updateData.productUpdate.userErrors)}`, true);
@@ -276,7 +272,7 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
                         data: {
                             shop,
                             productId: id,
-                            productTitle: product.title, // Use actual product title
+                            productTitle: product.title,
                             productSku: sku,
                             method: "AUTO",
                             action: "AUTO-DEACTIVATE"
@@ -288,9 +284,17 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
 
             } catch (err: any) {
                 logger(`[Scheduler] Failed to deactivate ${id}: ${err.message}`, true);
+            } finally {
+                processed++;
+                await db.settings.update({
+                    where: { shop },
+                    data: { currentStatus: `Deactivating: ${processed}/${total} items...` }
+                });
             }
         }
     }
+
+    return deactivatedItems;
 
     return deactivatedItems;
 }

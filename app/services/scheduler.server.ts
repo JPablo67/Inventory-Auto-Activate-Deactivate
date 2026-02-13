@@ -31,7 +31,11 @@ function scheduleNextRun() {
 
         global.__isScanning = true;
         try {
+            // Run Auto-Deactivation Scan
             await runAutoScan();
+
+            // Run Auto-Reactivation Sweeper (Safety Net)
+            await runReactivationHelper();
         } catch (error) {
             console.error("[Scheduler] Error in scan loop:", error);
         } finally {
@@ -256,7 +260,7 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
                 // Combined Mutation
                 const response = await client.graphql(
                     `mutation deactivateProduct($id: ID!) {
-                        tagsAdd(id: $id, tags: ["auto-archived-oos"]) { userErrors { field message } }
+                        tagsAdd(id: $id, tags: ["auto-changed-draft"]) { userErrors { field message } }
                         productUpdate(input: {id: $id, status: DRAFT}) { userErrors { field message } }
                     }`,
                     { variables: { id } }
@@ -305,4 +309,97 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
     return deactivatedItems;
 
     return deactivatedItems;
+}
+
+// Logic for AUTO-REACTIVATION SWEEPER (Safety Net)
+async function runReactivationHelper() {
+    console.log(`[Scheduler] Sweeper - Checking for restocked drafts...`);
+    try {
+        const settingsList = await db.settings.findMany({
+            where: { autoReactivate: { equals: true } }
+        });
+
+        if (settingsList.length === 0) return;
+
+        for (const settings of settingsList) {
+            await executeReactivationScan(settings.shop);
+        }
+
+    } catch (error) {
+        console.error("[Scheduler] Error in Reactivation Sweeper:", error);
+    }
+}
+
+async function executeReactivationScan(shop: string) {
+    try {
+        const { admin } = await shopify.unauthenticated.admin(shop);
+
+        // Scan for BOTH tags to catch old and new deactivated items
+        // Use OR operator to find products with EITHER tag in a single query
+        // Syntax: (tag:A OR tag:B) AND status:draft AND inventory_total:>0
+        const query = `(tag:auto-changed-draft OR tag:auto-archived-oos) AND status:draft AND inventory_total:>0`;
+
+        await processReactivationQuery(admin, shop, query);
+
+    } catch (error) {
+        console.error(`[Scheduler] Failed Reactivation Scan for ${shop}:`, error);
+    }
+}
+
+async function processReactivationQuery(admin: any, shop: string, searchQuery: string) {
+    const query = `
+        query getRestockedDrafts($cursor: String, $query: String) {
+          products(first: 50, query: $query, after: $cursor) {
+            pageInfo { hasNextPage, endCursor }
+            nodes {
+              id
+              title
+              tags
+              variants(first: 1) { nodes { sku } }
+            }
+          }
+        }
+    `;
+
+    let hasNextPage = true;
+    let cursor = null;
+
+    // Mutation defined outside loop
+    const updateQuery = `
+        mutation reactivate($id: ID!, $tags: [String!]!) {
+            productUpdate(input: {id: $id, status: ACTIVE}) { userErrors { field message } }
+            tagsRemove(id: $id, tags: $tags) { userErrors { field message } }
+        }
+    `;
+
+    while (hasNextPage) {
+        const response: any = await admin.graphql(query, { variables: { cursor, query: searchQuery } });
+        const responseJson: any = await response.json();
+
+        const data = responseJson.data?.products;
+        if (!data) break;
+
+        const { nodes, pageInfo } = data;
+
+        for (const product of nodes) {
+            console.log(`[Scheduler] Sweeper found restocked product to Reactivate: ${product.title}`);
+
+            const tagsToRemove = ["auto-changed-draft", "auto-archived-oos"];
+            await admin.graphql(updateQuery, { variables: { id: product.id, tags: tagsToRemove } });
+
+            await db.activityLog.create({
+                data: {
+                    shop,
+                    productId: product.id,
+                    productTitle: product.title,
+                    productSku: product.variants?.nodes?.[0]?.sku || "",
+                    method: "AUTO-SWEEPER",
+                    action: "REACTIVATE"
+                }
+            });
+        }
+
+        hasNextPage = pageInfo.hasNextPage;
+        cursor = pageInfo.endCursor;
+    }
 }

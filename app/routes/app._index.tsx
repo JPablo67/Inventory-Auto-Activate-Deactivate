@@ -37,6 +37,7 @@ interface Settings {
   minDaysInactive: number;
   lastScanType?: string;
   lastScanResults?: string;
+  autoReactivate: boolean;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -212,6 +213,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { success: true, savedSettings: true };
   }
 
+  if (actionType === "toggleAutoReactivate") {
+    const autoReactivate = formData.get("isActive") === "true";
+    await db.settings.upsert({
+      where: { shop: settingsSession.shop },
+      update: { autoReactivate },
+      create: { shop: settingsSession.shop, autoReactivate }
+    });
+    return { success: true, savedAutoReactivate: true };
+  }
+
   return null;
 };
 
@@ -268,6 +279,7 @@ export default function Index() {
   const [frequency, setFrequency] = useState(typedSettings?.frequency?.toString() || "1");
   const [frequencyUnit, setFrequencyUnit] = useState(typedSettings?.frequencyUnit || "days");
   const [autoMinDays, setAutoMinDays] = useState(typedSettings?.minDaysInactive?.toString() || "90");
+  const [autoReactivateEnabled, setAutoReactivateEnabled] = useState(typedSettings?.autoReactivate ? 'true' : 'false');
 
   const [daysThreshold, setDaysThreshold] = useState("90");
   const [timeLeft, setTimeLeft] = useState("");
@@ -289,6 +301,9 @@ export default function Index() {
     if ((actionData as any)?.savedSettings) {
       shopify.toast.show("Settings saved!");
     }
+    if ((actionData as any)?.savedAutoReactivate) {
+      shopify.toast.show("Auto-Reactivation updated!");
+    }
   }, [actionData, shopify]);
 
   const handleToggleAuto = (checked: boolean) => {
@@ -301,6 +316,15 @@ export default function Index() {
       frequency,
       frequencyUnit,
       minDaysInactive: autoMinDays
+    }, { method: "POST" });
+  };
+
+  const handleToggleAutoReactivate = (checked: boolean) => {
+    const newVal = checked ? 'true' : 'false';
+    setAutoReactivateEnabled(newVal);
+    submit({
+      actionType: "toggleAutoReactivate",
+      isActive: newVal
     }, { method: "POST" });
   };
 
@@ -537,6 +561,30 @@ export default function Index() {
               {renderStatusCard(currentStats.activeNoStock, "Active (No Stock)", "activeNoStock")}
               {renderStatusCard(currentStats.inactiveWithStock, "Inactive (Has Stock)", "inactiveWithStock")}
             </div>
+          </Layout.Section>
+        </Layout>
+
+        <Layout>
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="400">
+                <InlineStack align="space-between" blockAlign="center">
+                  <BlockStack gap="200">
+                    <Text as="h2" variant="headingMd">Auto-Reactivation</Text>
+                    <Text as="p" tone={autoReactivateEnabled === 'true' ? 'success' : 'subdued'}>
+                      {autoReactivateEnabled === 'true' ? 'Monitoring for restocks...' : 'Disabled'}
+                    </Text>
+                  </BlockStack>
+                  <Checkbox
+                    label={autoReactivateEnabled === 'true' ? "On" : "Off"}
+                    checked={autoReactivateEnabled === 'true'}
+                    onChange={handleToggleAutoReactivate}
+                  />         </InlineStack>
+                <Text as="p" variant="bodyMd" tone="subdued">
+                  Automatically activates products tagged with <code>auto-changed-draft</code> when inventory returns.
+                </Text>
+              </BlockStack>
+            </Card>
           </Layout.Section>
         </Layout>
 

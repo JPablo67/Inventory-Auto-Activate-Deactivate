@@ -52,6 +52,7 @@ model Settings {
   frequency       Int      @default(1)
   frequencyUnit   String   @default("days") // "days" or "minutes"
   minDaysInactive Int      @default(90)
+  autoReactivate  Boolean  @default(false)
   lastRunAt       DateTime?
   lastScanType    String?  // "AUTO" or "MANUAL"
   lastScanResults String?  // JSON string of products found/actioned

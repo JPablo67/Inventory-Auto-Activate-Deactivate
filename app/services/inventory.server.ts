@@ -1,6 +1,6 @@
 import shopify from "../shopify.server";
 
-const DEACTIVATION_TAG = "auto-archived-oos";
+const DEACTIVATION_TAG = "auto-changed-draft";
 
 
 export interface ProductCandidate {

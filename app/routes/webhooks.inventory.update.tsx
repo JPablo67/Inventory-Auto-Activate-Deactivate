@@ -19,8 +19,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     console.log(`[Webhook] Inventory update: Item ${inventory_item_id}, Available ${available}`);
 
     if (available && available > 0) {
-        // Stock returned! Check if we need to reactivate.
-        // We need to find the product associated with this inventory item.
+        // Stock returned!
+
+        // 1. Check if "Auto-Reactivation" is globally enabled for this shop
+        // We need to fetch settings. Authenticate webhook gives us 'shop' domain.
+        const settings = await db.settings.findUnique({ where: { shop } });
+
+        if (!settings?.autoReactivate) {
+            console.log(`[Webhook] Auto-Reactivation is OFF for ${shop}. Skipping.`);
+            return new Response();
+        }
+
+        // 2. We need to find the product associated with this inventory item.
         const query = `
         query findProduct($inventoryItemId: ID!) {
             inventoryItem(id: $inventoryItemId) {
@@ -49,7 +59,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const variant = responseJson.data?.inventoryItem?.variant;
         const product = variant?.product;
 
-        if (product && product.tags && product.tags.includes("auto-archived-oos")) {
+        const hasNewTag = product.tags && product.tags.includes("auto-changed-draft");
+        const hasOldTag = product.tags && product.tags.includes("auto-archived-oos");
+
+        if (product && (hasNewTag || hasOldTag)) {
             console.log(`[Webhook] MATCH! Reactivating product ${product.title}`);
 
             // Reactivate
@@ -64,7 +77,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }
         `;
 
-            const updateRes = await admin.graphql(updateQuery, { variables: { id: product.id, tags: ["auto-archived-oos"] } });
+            // Remove BOTH tags to be clean
+            const tagsToRemove = ["auto-changed-draft", "auto-archived-oos"];
+            const updateRes = await admin.graphql(updateQuery, { variables: { id: product.id, tags: tagsToRemove } });
             const updateJson = await updateRes.json();
             console.log(`[Webhook] Update Response: ${JSON.stringify(updateJson)}`);
 

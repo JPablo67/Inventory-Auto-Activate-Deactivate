@@ -62,8 +62,8 @@ export default function SettingsPage() {
     const statusFetcher = useFetcher<any>();
     const logsFetcher = useFetcher<any>();
 
-    // Real-time source of truth
-    const realtimeSettings = statusFetcher.data?.settings || settings;
+    // Real-time source of truth (Merge initial settings with updates)
+    const realtimeSettings = { ...settings, ...(statusFetcher.data?.settings || {}) };
     const currentStatus = realtimeSettings?.currentStatus || "IDLE";
     const isActive = realtimeSettings?.isActive;
     const isRunning = currentStatus !== 'IDLE';
@@ -116,21 +116,21 @@ export default function SettingsPage() {
     }, [isRunning, statusFetcher]);
 
     useEffect(() => {
-        if (!settings?.isActive || !settings?.lastRunAt) {
+        if (!realtimeSettings?.isActive || !realtimeSettings?.lastRunAt) {
             setTimeLeft(null);
             setProgress(0);
             return;
         }
 
         const interval = setInterval(() => {
-            const lastRun = new Date(settings.lastRunAt!).getTime();
+            const lastRun = new Date(realtimeSettings.lastRunAt!).getTime();
             const now = Date.now();
             let nextRun = lastRun;
 
-            if (settings.frequencyUnit === 'days') {
-                nextRun += settings.frequency * 24 * 60 * 60 * 1000;
+            if (realtimeSettings.frequencyUnit === 'days') {
+                nextRun += realtimeSettings.frequency * 24 * 60 * 60 * 1000;
             } else { // minutes
-                nextRun += settings.frequency * 60 * 1000;
+                nextRun += realtimeSettings.frequency * 60 * 1000;
             }
 
             const diff = nextRun - now;
@@ -156,7 +156,7 @@ export default function SettingsPage() {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [settings]);
+    }, [realtimeSettings]);
 
     const handleToggleAuto = (isChecked: boolean) => {
         const newValue = isChecked ? 'true' : 'false';
@@ -293,45 +293,76 @@ export default function SettingsPage() {
                     </Card>
 
                     {/* Last Auto-Scan Results */}
-                    {settings?.lastScanType === 'AUTO' && settings?.lastScanResults && (
-                        <Box paddingBlockStart="400">
-                            <Card>
-                                <BlockStack gap="400">
-                                    <Text as="h2" variant="headingMd">Last Auto-Scan Results</Text>
-                                    <Banner tone="info">
-                                        <p>
-                                            The last automatic scan on <strong>{new Date(settings.lastRunAt!).toLocaleString()}</strong> processed these products.
-                                        </p>
-                                    </Banner>
-                                    <IndexTable
-                                        resourceName={{ singular: 'product', plural: 'products' }}
-                                        itemCount={JSON.parse(settings.lastScanResults).length}
-                                        selectedItemsCount={0}
-                                        onSelectionChange={() => { }}
-                                        headings={[
-                                            { title: 'Product' },
-                                            { title: 'SKU' },
-                                            { title: 'Status' }
-                                        ]}
-                                        selectable={false}
-                                    >
-                                        {JSON.parse(settings.lastScanResults).slice(0, 5).map((product: any, index: number) => (
-                                            <IndexTable.Row id={product.id || index.toString()} key={product.id || index} position={index}>
-                                                <IndexTable.Cell>
-                                                    <Text as="span" variant="bodyMd" fontWeight="bold">{product.title}</Text>
-                                                </IndexTable.Cell>
-                                                <IndexTable.Cell>{product.sku || '-'}</IndexTable.Cell>
-                                                <IndexTable.Cell>Deactivated</IndexTable.Cell>
-                                            </IndexTable.Row>
-                                        ))}
-                                    </IndexTable>
-                                    {JSON.parse(settings.lastScanResults).length > 5 && (
-                                        <Text as="p" tone="subdued" alignment="center">...and {JSON.parse(settings.lastScanResults).length - 5} more.</Text>
-                                    )}
-                                </BlockStack>
-                            </Card>
-                        </Box>
-                    )}
+                    {/* Last Auto-Scan Results */}
+                    <Box paddingBlockStart="400">
+                        <Card>
+                            <BlockStack gap="400">
+                                <Text as="h2" variant="headingMd">Last Auto-Scan Results</Text>
+                                {(() => {
+                                    if (!realtimeSettings?.lastRunAt || !realtimeSettings?.lastScanResults) {
+                                        return (
+                                            <Banner tone="info">
+                                                <p>The auto-deactivation job hasn't run yet.</p>
+                                            </Banner>
+                                        );
+                                    }
+
+                                    let results = [];
+                                    try {
+                                        results = JSON.parse(realtimeSettings.lastScanResults);
+                                    } catch (e) {
+                                        console.error("Failed to parse scan results", e);
+                                    }
+
+                                    const count = results.length;
+                                    if (count === 0) {
+                                        return (
+                                            <Banner tone="success">
+                                                <p>
+                                                    The last automatic scan on <strong>{new Date(realtimeSettings.lastRunAt).toLocaleString()}</strong> found <strong>0 products</strong> matching the deactivation criteria. Everything is clean!
+                                                </p>
+                                            </Banner>
+                                        );
+                                    }
+
+                                    return (
+                                        <>
+                                            <Banner tone="info">
+                                                <p>
+                                                    The last automatic scan on <strong>{new Date(realtimeSettings.lastRunAt).toLocaleString()}</strong> deactivated <strong>{count} products</strong>.
+                                                </p>
+                                            </Banner>
+                                            <IndexTable
+                                                resourceName={{ singular: 'product', plural: 'products' }}
+                                                itemCount={count}
+                                                selectedItemsCount={0}
+                                                onSelectionChange={() => { }}
+                                                headings={[
+                                                    { title: 'Product' },
+                                                    { title: 'SKU' },
+                                                    { title: 'Status' }
+                                                ]}
+                                                selectable={false}
+                                            >
+                                                {results.slice(0, 5).map((product: any, index: number) => (
+                                                    <IndexTable.Row id={product.id || index.toString()} key={product.id || index} position={index}>
+                                                        <IndexTable.Cell>
+                                                            <Text as="span" variant="bodyMd" fontWeight="bold">{product.title}</Text>
+                                                        </IndexTable.Cell>
+                                                        <IndexTable.Cell>{product.sku || '-'}</IndexTable.Cell>
+                                                        <IndexTable.Cell>Deactivated</IndexTable.Cell>
+                                                    </IndexTable.Row>
+                                                ))}
+                                            </IndexTable>
+                                            {count > 5 && (
+                                                <Text as="p" tone="subdued" alignment="center">...and {count - 5} more.</Text>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+                            </BlockStack>
+                        </Card>
+                    </Box>
 
                     {/* Recent Activity */}
                     <Box paddingBlockStart="400">

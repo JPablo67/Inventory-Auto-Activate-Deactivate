@@ -11,7 +11,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             isActive: true,
             lastRunAt: true,
             lastScanType: true,
-            lastScanResults: true
+            lastScanResults: true,
+            frequency: true,
+            frequencyUnit: true
         }
     });
     const latestLog = await db.activityLog.findFirst({

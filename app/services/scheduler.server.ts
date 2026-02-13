@@ -237,7 +237,7 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
         const total = candidates.length;
         let processed = 0;
 
-        // UPDATE STATUS
+        // UPDATE STATUS (Initial)
         await db.settings.update({
             where: { shop },
             data: { currentStatus: `Deactivating: 0/${total} items...` }
@@ -253,21 +253,25 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
 
             const id = product.id;
             try {
-                logger(`[Scheduler] Deactivating ${id}...`);
+                // Combined Mutation
+                const response = await client.graphql(
+                    `mutation deactivateProduct($id: ID!) {
+                        tagsAdd(id: $id, tags: ["auto-archived-oos"]) { userErrors { field message } }
+                        productUpdate(input: {id: $id, status: DRAFT}) { userErrors { field message } }
+                    }`,
+                    { variables: { id } }
+                );
 
-                // Add tag
-                await client.graphql(`mutation addTags($id: ID!) { tagsAdd(id: $id, tags: ["auto-archived-oos"]) { userErrors { field message } } }`, { variables: { id } });
+                const responseJson = await response.json();
+                const data = responseJson.data;
 
-                // Set Draft
-                const updateResponse = await client.graphql(`mutation setDraft($id: ID!) { productUpdate(input: {id: $id, status: DRAFT}) { userErrors { field message } } }`, { variables: { id } });
-                const updateJson = await updateResponse.json();
-                const updateData = updateJson.data;
+                const tagErrors = data?.tagsAdd?.userErrors || [];
+                const updateErrors = data?.productUpdate?.userErrors || [];
 
-                if (updateData?.productUpdate?.userErrors?.length > 0) {
-                    logger(`[Scheduler] Error setting ${id} to DRAFT: ${JSON.stringify(updateData.productUpdate.userErrors)}`, true);
+                if (tagErrors.length > 0 || updateErrors.length > 0) {
+                    logger(`[Scheduler] Error deactivating ${id}: ${JSON.stringify([...tagErrors, ...updateErrors])}`, true);
                 } else {
                     const sku = product.variants?.nodes?.[0]?.sku || "";
-
                     await db.activityLog.create({
                         data: {
                             shop,
@@ -278,7 +282,6 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
                             action: "AUTO-DEACTIVATE"
                         }
                     });
-                    logger(`[Scheduler] Successfully deactivated ${id}`);
                     deactivatedItems.push(product);
                 }
 
@@ -286,12 +289,17 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
                 logger(`[Scheduler] Failed to deactivate ${id}: ${err.message}`, true);
             } finally {
                 processed++;
-                await db.settings.update({
-                    where: { shop },
-                    data: { currentStatus: `Deactivating: ${processed}/${total} items...` }
-                });
+                // Update status every 10 items or on last item
+                if (processed % 10 === 0 || processed === total) {
+                    await db.settings.update({
+                        where: { shop },
+                        data: { currentStatus: `Deactivating: ${processed}/${total} items...` }
+                    });
+                }
             }
         }
+
+
     }
 
     return deactivatedItems;

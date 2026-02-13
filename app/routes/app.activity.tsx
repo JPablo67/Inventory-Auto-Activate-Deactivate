@@ -23,16 +23,25 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { session, admin } = await authenticate.admin(request);
     const url = new URL(request.url);
     const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const filter = url.searchParams.get("filter") || "all";
     const skip = (page - 1) * PAGE_SIZE;
+
+    // Filter Logic
+    let whereClause: any = { shop: session.shop };
+    if (filter === 'deactivated') {
+        whereClause.action = { in: ['DEACTIVATE', 'AUTO-DEACTIVATE'] };
+    } else if (filter === 'reactivated') {
+        whereClause.action = 'REACTIVATE';
+    }
 
     // Fetch total count for pagination
     const totalCount = await db.activityLog.count({
-        where: { shop: session.shop }
+        where: whereClause
     });
 
     // Fetch logs
     const logs = await db.activityLog.findMany({
-        where: { shop: session.shop },
+        where: whereClause,
         orderBy: { createdAt: 'desc' },
         skip: skip,
         take: PAGE_SIZE
@@ -107,10 +116,17 @@ export default function ActivityLogPage() {
     const navigation = useNavigation();
     const navigate = useNavigate();
 
+    const [searchParams] = useSearchParams();
+    const filter = searchParams.get("filter") || "all";
+
     const handleClearLogs = () => {
         if (confirm("Are you sure you want to clear the entire activity history?")) {
             submit({ actionType: "clearLogs" }, { method: "POST" });
         }
+    };
+
+    const handleFilterChange = (newFilter: string) => {
+        navigate(`?filter=${newFilter}&page=1`);
     };
 
     const isLoading = navigation.state === "submitting" || navigation.state === "loading";
@@ -121,10 +137,32 @@ export default function ActivityLogPage() {
                 <Layout.Section>
                     <Card>
                         <BlockStack gap="300">
-                            <InlineStack align="space-between">
-                                <Text as="h2" variant="headingMd">
-                                    Full History ({totalCount})
-                                </Text>
+                            <InlineStack align="space-between" blockAlign="center">
+                                <InlineStack gap="400" blockAlign="center">
+                                    <Text as="h2" variant="headingMd">
+                                        Full History ({totalCount})
+                                    </Text>
+                                    <InlineStack gap="200">
+                                        <Button
+                                            pressed={filter === 'all'}
+                                            variant={filter === 'all' ? 'primary' : 'tertiary'}
+                                            onClick={() => handleFilterChange('all')}
+                                            size="micro"
+                                        >All</Button>
+                                        <Button
+                                            pressed={filter === 'deactivated'}
+                                            variant={filter === 'deactivated' ? 'primary' : 'tertiary'}
+                                            onClick={() => handleFilterChange('deactivated')}
+                                            size="micro"
+                                        >Deactivated</Button>
+                                        <Button
+                                            pressed={filter === 'reactivated'}
+                                            variant={filter === 'reactivated' ? 'primary' : 'tertiary'}
+                                            onClick={() => handleFilterChange('reactivated')}
+                                            size="micro"
+                                        >Reactivated</Button>
+                                    </InlineStack>
+                                </InlineStack>
                                 {logs.length > 0 && (
                                     <Button variant="plain" tone="critical" onClick={handleClearLogs} loading={isLoading}>
                                         Clear History
@@ -211,9 +249,9 @@ export default function ActivityLogPage() {
                                     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
                                         <Pagination
                                             hasPrevious={page > 1}
-                                            onPrevious={() => navigate(`?page=${page - 1}`)}
+                                            onPrevious={() => navigate(`?page=${page - 1}&filter=${filter}`)}
                                             hasNext={page < totalPages}
-                                            onNext={() => navigate(`?page=${page + 1}`)}
+                                            onNext={() => navigate(`?page=${page + 1}&filter=${filter}`)}
                                         />
                                     </div>
                                 </>

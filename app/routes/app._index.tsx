@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { useActionData, useLoaderData, useSubmit, useNavigation, useSearchParams, Link as RemixLink, useRevalidator } from "@remix-run/react";
+import { useActionData, useLoaderData, useSubmit, useNavigation, useSearchParams, Link as RemixLink, useRevalidator, useFetcher } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -35,6 +35,8 @@ interface Settings {
   frequencyUnit: string;
   lastRunAt: string | null;
   minDaysInactive: number;
+  lastScanType?: string;
+  lastScanResults?: string;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -214,7 +216,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Index() {
-  const { stats, logs, productList, view, settings } = useLoaderData<typeof loader>();
+  const { stats: initialStats, logs, productList, view, settings } = useLoaderData<typeof loader>();
+  const statsFetcher = useFetcher<any>();
+  const currentStats = statsFetcher.data?.stats || initialStats;
   const actionData = useActionData<typeof action>();
   const submit = useSubmit();
   const navigation = useNavigation();
@@ -269,19 +273,15 @@ export default function Index() {
   const [timeLeft, setTimeLeft] = useState("");
   const [progress, setProgress] = useState(0);
 
-  // Polling for Auto Updates
+  // Polling for Real-time Stats
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (autoEnabled === 'true') {
-      // Poll every 5 seconds to check for new logs/updates
-      interval = setInterval(() => {
-        if (document.visibilityState === "visible") {
-          revalidator.revalidate();
-        }
-      }, 5000);
-    }
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible" && statsFetcher.state === "idle") {
+        statsFetcher.load("/api/stats");
+      }
+    }, 3000);
     return () => clearInterval(interval);
-  }, [autoEnabled, revalidator]);
+  }, [statsFetcher]);
 
   const isSaving = isLoading && navigation.formData?.get("actionType") === "saveSettings";
 
@@ -439,7 +439,7 @@ export default function Index() {
         {product.sku}
       </IndexTable.Cell>
       <IndexTable.Cell>
-        <Badge tone="critical">{product.daysInactive?.toString()} days inactive</Badge>
+        <Badge tone="critical">{`${(product.daysInactive || 0)} days inactive`}</Badge>
       </IndexTable.Cell>
       <IndexTable.Cell>Active</IndexTable.Cell>
     </IndexTable.Row>
@@ -531,11 +531,11 @@ export default function Index() {
         <Layout>
           <Layout.Section>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
-              {renderStatusCard(stats.active, "Active Products", "active")}
-              {renderStatusCard(stats.draft, "Drafts", "draft")}
-              {renderStatusCard(stats.archived, "Archived", "archived")}
-              {renderStatusCard(stats.activeNoStock, "Active (No Stock)", "activeNoStock")}
-              {renderStatusCard(stats.inactiveWithStock, "Inactive (Has Stock)", "inactiveWithStock")}
+              {renderStatusCard(currentStats.active, "Active Products", "active")}
+              {renderStatusCard(currentStats.draft, "Drafts", "draft")}
+              {renderStatusCard(currentStats.archived, "Archived", "archived")}
+              {renderStatusCard(currentStats.activeNoStock, "Active (No Stock)", "activeNoStock")}
+              {renderStatusCard(currentStats.inactiveWithStock, "Inactive (Has Stock)", "inactiveWithStock")}
             </div>
           </Layout.Section>
         </Layout>

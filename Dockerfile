@@ -9,13 +9,21 @@ ENV NODE_ENV=production
 
 COPY package.json package-lock.json* ./
 
-RUN npm ci --omit=dev && npm cache clean --force
-# Remove CLI packages since we don't need them in production by default.
-# Remove this line if you want to run CLI commands in your container.
-RUN npm remove @shopify/cli
+# Install all dependencies including devDependencies for build
+RUN npm ci
+
+# Remove CLI packages if desired, but risky if scripts depend on them. Keeping for now.
+# RUN npm remove @shopify/cli
 
 COPY . .
 
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Build the app
 RUN npm run build
+
+# Prune dev dependencies for smaller image (optional)
+# RUN npm prune --production
 
 CMD ["npm", "run", "docker-start"]

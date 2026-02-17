@@ -4,7 +4,7 @@ services:
     build: .
     restart: always
     ports:
-      - "3000:3000"
+      - "4500:3000"
     env_file: .env
     volumes:
       - ./prisma:/app/prisma

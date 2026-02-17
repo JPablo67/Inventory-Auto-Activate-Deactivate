@@ -59,7 +59,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     ].map((item) =>
       admin.graphql(
         `query CountProducts($query: String) {
-            productsCount(query: $query) {
+            productsCount(query: $query, limit: null) {
               count
             }
           }`,

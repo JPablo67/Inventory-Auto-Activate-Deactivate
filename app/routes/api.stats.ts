@@ -12,8 +12,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         { label: "inactiveWithStock", query: "(status:draft OR status:archived) AND inventory_total:>0" }
     ].map((item) =>
         admin.graphql(
-            `query CountProducts($query: String) {
-            productsCount(query: $query) {
+            `query getStats($query: String) {
+            productsCount(query: $query, limit: null) {
               count
             }
           }`,

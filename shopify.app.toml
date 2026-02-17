@@ -2,7 +2,7 @@
 
 client_id = "185f5c6013c517130744cdfe5c20aeb0"
 name = "Auto Hide Out of Stock"
-application_url = "https://example.com"
+application_url = "https://commons-carries-jennifer-separated.trycloudflare.com"
 embedded = true
 
 [build]
@@ -29,4 +29,8 @@ api_version = "2026-04"
 scopes = "write_products,read_inventory"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [
+  "https://commons-carries-jennifer-separated.trycloudflare.com/auth/callback",
+  "https://commons-carries-jennifer-separated.trycloudflare.com/auth/shopify/callback",
+  "https://commons-carries-jennifer-separated.trycloudflare.com/api/auth/callback"
+]

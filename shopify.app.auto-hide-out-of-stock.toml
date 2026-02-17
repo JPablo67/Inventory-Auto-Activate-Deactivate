@@ -1,8 +1,8 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "7ffea61766672accc4e3e02fd12cf4fa"
+client_id = "4f914cc6083884e723ed5592e802b2c8"
 name = "Auto Hide Out of Stock"
-application_url = "https://example.com"
+application_url = "https://commons-carries-jennifer-separated.trycloudflare.com"
 embedded = true
 
 [build]
@@ -17,4 +17,8 @@ api_version = "2026-04"
 scopes = "read_inventory,write_products"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [
+  "https://commons-carries-jennifer-separated.trycloudflare.com/auth/callback",
+  "https://commons-carries-jennifer-separated.trycloudflare.com/auth/shopify/callback",
+  "https://commons-carries-jennifer-separated.trycloudflare.com/api/auth/callback"
+]

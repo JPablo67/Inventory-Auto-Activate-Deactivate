@@ -294,7 +294,7 @@ export default function ManualScanPage() {
                                     />
                                 </div>
                                 <Box paddingBlockStart="050">
-                                    <Button variant="primary" onClick={handleScan} loading={isScanning} disabled={isDeactivating}>
+                                    <Button variant="primary" onClick={handleScan} loading={isScanning} disabled>
                                         {/* To disable: add 'disabled' prop above and remove 'disabled={isDeactivating}' */}
                                         Scan Now
                                     </Button>

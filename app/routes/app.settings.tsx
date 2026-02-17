@@ -197,15 +197,16 @@ export default function SettingsPage() {
                                 <div
                                     role="switch"
                                     aria-checked={autoEnabled === 'true'}
-                                    onClick={() => handleToggleAuto(autoEnabled !== 'true')}
+                                    // onClick={() => handleToggleAuto(autoEnabled !== 'true')} // Disabled
                                     style={{
                                         position: 'relative',
                                         width: '48px',
                                         height: '28px',
-                                        backgroundColor: autoEnabled === 'true' ? 'var(--p-color-bg-fill-success)' : '#d2d5d8', // Explicit Gray
+                                        backgroundColor: autoEnabled === 'true' ? 'var(--p-color-bg-fill-success)' : '#d2d5d8',
                                         borderRadius: '100px',
-                                        cursor: 'pointer',
-                                        transition: 'background-color 0.2s ease-in-out'
+                                        cursor: 'not-allowed',
+                                        transition: 'background-color 0.2s ease-in-out',
+                                        opacity: 0.6
                                     }}
                                 >
                                     <div style={{

@@ -201,12 +201,13 @@ export default function SettingsPage() {
                                     // To disable: Comment out onClick above, set cursor: 'not-allowed', and opacity: 0.6
                                     style={{
                                         opacity: 0.6,
+                                        //cursor: 'pointer',
+                                        cursor: 'not-allowed',
                                         position: 'relative',
                                         width: '48px',
                                         height: '28px',
                                         backgroundColor: autoEnabled === 'true' ? 'var(--p-color-bg-fill-success)' : '#d2d5d8',
                                         borderRadius: '100px',
-                                        cursor: 'not-allowed',
                                         transition: 'background-color 0.2s ease-in-out'
                                     }}
                                 >

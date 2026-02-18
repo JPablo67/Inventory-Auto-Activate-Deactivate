@@ -10,7 +10,7 @@ jobs:
       - name: Deploy
         run: |
           # Navigate to project folder
-          cd /home/jpablo67/Inventory-Auto-Activate-Deactivate
+          cd /home/jpablo67/Documents/Work/Inventory-Auto-Activate-Deactivate
           
           # Pull latest code
           git fetch --all

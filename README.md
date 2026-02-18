@@ -1,68 +1,60 @@
-# 📦 Inventory Auto Deactivate
-### Advanced Shopify App for Automated Inventory Hygiene
-*(Private Portfolio Project)*
+# Inventory Auto Deactivator
+### Enterprise-Grade Inventory Hygiene Automation for Shopify
 
 ![Status](https://img.shields.io/badge/Status-Production-success)
-![Stack](https://img.shields.io/badge/Stack-Remix%20%7C%20Shopify%20%7C%20Docker-blue)
-![DevOps](https://img.shields.io/badge/DevOps-Self--Hosted%20%7C%20CI%2FCD-orange)
-![License](https://img.shields.io/badge/License-Private-lightgrey)
+![Platform](https://img.shields.io/badge/Platform-Shopify%20Plus%20Ready-9cf)
+![Stack](https://img.shields.io/badge/Stack-Remix%20%7C%20Prisma%20%7C%20Docker-blue)
 
 ---
 
-## 🚀 Overview
-**Inventory Auto Deactivate** is a full-stack Shopify Application designed to solve a critical e-commerce problem: **Ghost Stock**.
+## 🎯 The Mission
+**Eliminate "Ghost Stock" and maximize catalog efficiency.**
 
-It automatically scans thousands of products daily to identify and hide items that have been **inactive** (no sales/updates) for a set period and have **zero inventory**. This cleans up the storefront, improves SEO, and ensures customers only see available products.
+High-volume e-commerce stores often suffer from catalog bloat—thousands of products that are out of stock and haven't sold in months. This hurts **SEO**, degrades **User Experience**, and clutters **Collections**.
 
-Built with **performance** and **reliability** in mind, it handles large catalogs via background job scheduling and real-time WebSockets for dashboard updates.
-
----
-
-## 🏗️ Architecture & DevOps
-This project goes beyond a standard app by implementing a robust **Self-Hosted Infrastructure** on a bare-metal Ubuntu Server.
-
-### 🔹 The Stack
-*   **Framework:** [Remix](https://remix.run/) (React + Node.js)
-*   **Database:** [Prisma ORM](https://www.prisma.io/) (SQLite / PostgreSQL ready)
-*   **UI System:** [Shopify Polaris](https://polaris.shopify.com/)
-*   **Containerization:** [Docker](https://www.docker.com/) & Docker Compose
-*   **Server:** Ubuntu Linux (Self-Hosted)
-
-### 🔹 The Infrastructure
-*   **Cloudflare Tunnel:** Exposes the localhost server securely to the internet without opening ports (Zero Trust Security).
-*   **Persistent SSL:** Managed automatically via Cloudflare Edge.
-*   **Automated CI/CD:**
-    *   **GitHub Actions Self-Hosted Runner** installed directly on the Ubuntu server.
-    *   **Zero-Downtime Deployment:** Pushing to `main` automatically triggers a build, stops containers, and restarts the service in seconds.
+**Inventory Auto Deactivator** is an automated, set-and-forget solution that runs 24/7 to identify, analyze, and hide these liabilities, ensuring your customers only see what they can buy.
 
 ---
 
-## ✨ Key Features
+## 💼 Core Capabilities
 
-### 1. 🤖 Intelligent Automation
-*   **Smart Scheduling:** Background jobs run daily scans based on user-configured thresholds (e.g., "Inactive for 90 days").
-*   **Safety Limits:** Built-in circuit breakers prevent accidental mass-deactivations.
+### 🛡️ Automated Catalog Protection
+*   **Intelligent Scanning Engine**: Configurable algorithms scan your entire catalog daily to identify products meeting specific "End of Life" criteria (e.g., *Zero Inventory* + *90 Days Inactive*).
+*   **Zero-Risk Execution**: Built-in "Circuit Breakers" and rate limits ensure automation never disrupts store uptime or API limits.
 
-### 2. ⚡ Real-Time Dashboard
-*   **Live Feedback:** Uses polling to show scan progress and deactivation counts in real-time.
-*   **Activity Log:** A searchable, persistent audit trail of every action taken by the bot.
+### ⚡ Real-Time Operational Dashboard
+*   **Live Observability**: Watch the scanning engine work in real-time via WebSockets.
+*   **Granular Audit Trail**: Every action (Deactivation, Reactivation, Scan) is logged with timestamp, SKU, and method, providing complete accountability for your operations team.
 
-### 3. 🔄 Auto-Reactivation
-*   **Webhook Listeners:** Instantly detects when inventory is added to a "Draft" product.
-*   **Automatic Publishing:** Immediately sets the product status back to "Active" so it can be sold again.
+### 🔄 Auto-Recovery (Reactivation)
+*   **Smart Inventory Listeners**: The moment stock is added to a "Draft" product, the system detects the webhooks and **immediately reactivates** the product, ensuring you never miss a sale.
 
-### 4. 🏢 Multi-Tenancy
-*   **Session Management:** Built to handle multiple shops simultaneously with strict data isolation via Prisma/Session storage.
-
----
-
-## 🛠️ Skills Demonstrated
-*   **Full-Stack Development:** React, TypeScript, Node.js, Prisma.
-*   **Shopify Ecosystem:** GraphQL Admin API, Webhooks, Polaris Design System.
-*   **System Administration:** Ubuntu Server management, SSH, Systemd services.
-*   **Container Functionality:** Dockerfiles, Volume Management, Network isolation.
-*   **DevOps Pipelines:** Writing GitHub Action workflows, managing Self-Hosted Runners.
+### 🏢 Multi-Tenant Architecture
+*   Designed for scale, supporting multiple Shopify stores simultaneously with strict data isolation and session management.
 
 ---
 
-> *This is a private project showcasing full-stack and DevOps capabilities. Source code available upon request.*
+## 🏗️ Technical Architecture
+*Built for reliability, speed, and security.*
+
+### The Stack
+*   **Frontend/Backend**: [Remix](https://remix.run/) (React + Node.js) for server-side rendering and swift UI interactions.
+*   **Database**: [Prisma ORM](https://www.prisma.io/) with SQLite/PostgreSQL for robust data integrity.
+*   **Design System**: Native [Shopify Polaris](https://polaris.shopify.com/) integration for a seamless, native-admin experience.
+
+### Infrastructure & DevOps
+*   **Self-Hosted Sovereignty**: Deployed on bare-metal Ubuntu servers for maximum performance and cost control.
+*   **Containerized Microservices**: Fully Dockerized application ensuring consistent environments from Dev to Production.
+*   **Zero-Trust Security**: Exposed via **Cloudflare Tunnels**, eliminating the need for open ports and providing enterprise-grade DDoS protection.
+*   **Automated CI/CD**: Seamless deployment pipeline via **GitHub Actions Self-Hosted Runners**, enabling zero-downtime updates with a single push to production.
+
+---
+
+## 🔒 Security & Privacy
+*   **No PII Collection**: The system operates strictly on Product and Inventory data.
+*   **OAuth 2.0 Integration**: Uses official Shopify Authentication flows.
+*   **Session Isolation**: Secure, encrypted session storage ensures data privacy between merchant instances.
+
+---
+
+> *Project maintained by [Juan Pablo Acosta].*

@@ -1,77 +1,68 @@
-# Inventory Auto Deactivator
+# 📦 Inventory Auto Deactivate
+### Advanced Shopify App for Automated Inventory Hygiene
+*(Private Portfolio Project)*
 
-A powerful Shopify App built to automatically keep your inventory clean by deactivating products that have been inactive for a specified period and have zero stock.
+![Status](https://img.shields.io/badge/Status-Production-success)
+![Stack](https://img.shields.io/badge/Stack-Remix%20%7C%20Shopify%20%7C%20Docker-blue)
+![DevOps](https://img.shields.io/badge/DevOps-Self--Hosted%20%7C%20CI%2FCD-orange)
+![License](https://img.shields.io/badge/License-Private-lightgrey)
 
-## 🚀 Key Features
+---
 
-*   **Automated Deactivation**: Set a schedule (e.g., every day) to scan for products that have been inactive for X days and have 0 inventory. The app automatically deactivates them (sets status to Draft).
-*   **Manual Scan**: Run a scan on-demand to preview which products would be deactivated, and choose to deactivate them selectively.
-*   **Real-Time Dashboard**: Monitor your store's health with live updates on Active, Draft, Archived, and Out-of-Stock products.
-*   **Activity Log**: detailed history of every action taken by the app (Auto or Manual), with filtering capabilities (Deactivated/Reactivated).
-*   **Safety First**: Built-in safety limits and "Immediate Stop" functionality to pause automation instantly.
+## 🚀 Overview
+**Inventory Auto Deactivate** is a full-stack Shopify Application designed to solve a critical e-commerce problem: **Ghost Stock**.
 
-## 🛠️ Tech Stack
+It automatically scans thousands of products daily to identify and hide items that have been **inactive** (no sales/updates) for a set period and have **zero inventory**. This cleans up the storefront, improves SEO, and ensures customers only see available products.
 
-*   **Framework**: [Remix](https://remix.run/)
-*   **Platform**: [Shopify App Template (Node)](https://github.com/Shopify/shopify-app-template-node)
-*   **Database**: [Prisma](https://www.prisma.io/) (SQLite for dev, easily switchable to Postgres/MySQL)
-*   **UI**: [Shopify Polaris](https://polaris.shopify.com/)
-*   **Backend**: Node.js, GraphQL (Shopify Admin API)
+Built with **performance** and **reliability** in mind, it handles large catalogs via background job scheduling and real-time WebSockets for dashboard updates.
 
-## 📂 Project Structure
+---
 
-*   `app/routes/app._index.tsx`: Main Dashboard (Metrics & Manual Scan).
-*   `app/routes/app.settings.tsx`: Configuration for Auto-Deactivation.
-*   `app/routes/app.activity.tsx`: Searchable/Filterable History Log.
-*   `app/services/inventory.server.ts`: Core logic for scanning and analyzing product inventory history.
-*   `app/services/scheduler.server.ts`: Background job runner for automated scans.
+## 🏗️ Architecture & DevOps
+This project goes beyond a standard app by implementing a robust **Self-Hosted Infrastructure** on a bare-metal Ubuntu Server.
 
-## ⚡ Setup & Installation
+### 🔹 The Stack
+*   **Framework:** [Remix](https://remix.run/) (React + Node.js)
+*   **Database:** [Prisma ORM](https://www.prisma.io/) (SQLite / PostgreSQL ready)
+*   **UI System:** [Shopify Polaris](https://polaris.shopify.com/)
+*   **Containerization:** [Docker](https://www.docker.com/) & Docker Compose
+*   **Server:** Ubuntu Linux (Self-Hosted)
 
-1.  **Clone the repository**
-    ```bash
-    git clone <repository-url>
-    cd inventory-deactivator
-    ```
+### 🔹 The Infrastructure
+*   **Cloudflare Tunnel:** Exposes the localhost server securely to the internet without opening ports (Zero Trust Security).
+*   **Persistent SSL:** Managed automatically via Cloudflare Edge.
+*   **Automated CI/CD:**
+    *   **GitHub Actions Self-Hosted Runner** installed directly on the Ubuntu server.
+    *   **Zero-Downtime Deployment:** Pushing to `main` automatically triggers a build, stops containers, and restarts the service in seconds.
 
-2.  **Install Dependencies**
-    ```bash
-    npm install
-    ```
+---
 
-3.  **Setup Environment**
-    Create a `.env` file based on `.env.example` (or use `shopify app env pull` if you have the Shopify CLI linked).
+## ✨ Key Features
 
-4.  **Database Setup**
-    ```bash
-    npm run setup
-    ```
-    (This runs `prisma generate` and `prisma migrate deploy`)
+### 1. 🤖 Intelligent Automation
+*   **Smart Scheduling:** Background jobs run daily scans based on user-configured thresholds (e.g., "Inactive for 90 days").
+*   **Safety Limits:** Built-in circuit breakers prevent accidental mass-deactivations.
 
-5.  **Run Locally**
-    ```bash
-    npm run dev
-    ```
+### 2. ⚡ Real-Time Dashboard
+*   **Live Feedback:** Uses polling to show scan progress and deactivation counts in real-time.
+*   **Activity Log:** A searchable, persistent audit trail of every action taken by the bot.
 
-## 📖 Usage
+### 3. 🔄 Auto-Reactivation
+*   **Webhook Listeners:** Instantly detects when inventory is added to a "Draft" product.
+*   **Automatic Publishing:** Immediately sets the product status back to "Active" so it can be sold again.
 
-### Auto-Deactivate
-1.  Go to **Settings**.
-2.  Enable "Auto-Deactivate".
-3.  Set your rules:
-    *   **Inactive Days**: Products with no sales/inventory changes for this many days.
-    *   **Frequency**: How often the scanner runs (e.g., Every 1 Day).
-4.  Save. The app will now run in the background.
+### 4. 🏢 Multi-Tenancy
+*   **Session Management:** Built to handle multiple shops simultaneously with strict data isolation via Prisma/Session storage.
 
-### Manual Scan
-1.  Go to **Dashboard**.
-2.  Click "Scan Now".
-3.  Review the list of candidates.
-4.  Select products and click "Deactivate Selected".
+---
 
-## 🛡️ Safety & performance
-*   **Batching**: Updates are batched to respect Shopify API limits.
-*   **Smart Polling**: The dashboard updates in real-time without overloading the API.
+## 🛠️ Skills Demonstrated
+*   **Full-Stack Development:** React, TypeScript, Node.js, Prisma.
+*   **Shopify Ecosystem:** GraphQL Admin API, Webhooks, Polaris Design System.
+*   **System Administration:** Ubuntu Server management, SSH, Systemd services.
+*   **Container Functionality:** Dockerfiles, Volume Management, Network isolation.
+*   **DevOps Pipelines:** Writing GitHub Action workflows, managing Self-Hosted Runners.
 
-## 📄 License
-MIT
+---
+
+> *This is a private project showcasing full-stack and DevOps capabilities. Source code available upon request.*

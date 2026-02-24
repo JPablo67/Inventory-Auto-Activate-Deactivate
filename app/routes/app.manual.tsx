@@ -243,7 +243,7 @@ export default function ManualScanPage() {
                 {product.sku}
             </IndexTable.Cell>
             <IndexTable.Cell>
-                <Badge tone="critical">{`${product.daysInactive?.toString()} days inactive`}</Badge>
+                <Badge tone="critical">{`${product.daysInactive?.toString()} days with no stock`}</Badge>
             </IndexTable.Cell>
             <IndexTable.Cell>Active</IndexTable.Cell>
         </IndexTable.Row>

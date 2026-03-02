@@ -17,7 +17,8 @@ import {
     IndexTable,
     Badge,
     Checkbox,
-    ProgressBar
+    ProgressBar,
+    FormLayout
 } from "@shopify/polaris";
 import { useState, useEffect } from "react";
 import db from "../db.server";
@@ -257,10 +258,10 @@ export default function SettingsPage() {
                                     Configure the schedule below. Enable the switch above to save and start the automation.
                                 </Text>
 
-                                <Layout>
-                                    <Layout.Section variant="oneHalf">
+                                <FormLayout>
+                                    <FormLayout.Group>
                                         <TextField
-                                            label="Deactivate (Change to Draft) products that have been out of stock for more than:"
+                                            label="Products that have been out of stock for more than:"
                                             type="number"
                                             value={autoMinDays}
                                             onChange={setAutoMinDays}
@@ -268,8 +269,6 @@ export default function SettingsPage() {
                                             disabled={autoEnabled === 'true'}
                                             suffix="days"
                                         />
-                                    </Layout.Section>
-                                    <Layout.Section variant="oneHalf">
                                         <TextField
                                             label="Run Scan Every"
                                             type="number"
@@ -291,8 +290,8 @@ export default function SettingsPage() {
                                                 />
                                             }
                                         />
-                                    </Layout.Section>
-                                </Layout>
+                                    </FormLayout.Group>
+                                </FormLayout>
                             </BlockStack>
                         </BlockStack>
                     </Card>

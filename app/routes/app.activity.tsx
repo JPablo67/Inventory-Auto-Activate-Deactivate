@@ -236,7 +236,22 @@ export default function ActivityLogPage() {
                                                         <Text variant="bodySm" as="span" fontWeight="bold">{sku}</Text>
                                                     </IndexTable.Cell>
                                                     <IndexTable.Cell>
-                                                        <Text variant="bodyMd" as="span">{name}</Text>
+                                                        <InlineStack gap="300" blockAlign="start" wrap={false}>
+                                                            <div>
+                                                                {image ? (
+                                                                    <Thumbnail
+                                                                        source={image}
+                                                                        alt={name}
+                                                                        size="small"
+                                                                    />
+                                                                ) : (
+                                                                    <div style={{ width: 40, height: 40, background: "#f1f1f1", borderRadius: 4 }}></div>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ flex: 1, minWidth: 0, wordBreak: "break-word", whiteSpace: "normal" }}>
+                                                                <Text variant="bodyMd" as="span">{name}</Text>
+                                                            </div>
+                                                        </InlineStack>
                                                     </IndexTable.Cell>
                                                     <IndexTable.Cell>
                                                         <Text variant="bodySm" as="span" tone="subdued">{id.split("/").pop()}</Text>

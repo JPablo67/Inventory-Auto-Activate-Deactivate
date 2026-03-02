@@ -348,15 +348,18 @@ export default function SettingsPage() {
                                                 ]}
                                                 selectable={false}
                                             >
-                                                {results.slice(0, 5).map((product: any, index: number) => (
-                                                    <IndexTable.Row id={product.id || index.toString()} key={product.id || index} position={index}>
-                                                        <IndexTable.Cell>
-                                                            <Text as="span" variant="bodyMd" fontWeight="bold">{product.title}</Text>
-                                                        </IndexTable.Cell>
-                                                        <IndexTable.Cell>{product.sku || '-'}</IndexTable.Cell>
-                                                        <IndexTable.Cell>Deactivated</IndexTable.Cell>
-                                                    </IndexTable.Row>
-                                                ))}
+                                                {results.slice(0, 5).map((product: any, index: number) => {
+                                                    const sku = product.sku || product.variants?.nodes?.[0]?.sku || '-';
+                                                    return (
+                                                        <IndexTable.Row id={product.id || index.toString()} key={product.id || index} position={index}>
+                                                            <IndexTable.Cell>
+                                                                <Text as="span" variant="bodyMd" fontWeight="bold">{product.title}</Text>
+                                                            </IndexTable.Cell>
+                                                            <IndexTable.Cell>{sku}</IndexTable.Cell>
+                                                            <IndexTable.Cell>Deactivated</IndexTable.Cell>
+                                                        </IndexTable.Row>
+                                                    );
+                                                })}
                                             </IndexTable>
                                             {count > 5 && (
                                                 <Text as="p" tone="subdued" alignment="center">...and {count - 5} more.</Text>

@@ -225,6 +225,7 @@ export default function ActivityLogPage() {
                                             }
 
                                             // SKU & Name
+                                            const image = product?.featuredImage?.url;
                                             const sku = log.productSku || product?.variants?.nodes?.[0]?.sku || "-";
                                             const name = log.productTitle || product?.title || "Unknown Product";
                                             const id = log.productId;

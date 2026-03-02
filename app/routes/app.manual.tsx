@@ -167,6 +167,21 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     action: "DEACTIVATE",
                 }
             });
+
+            // Remove the product from persistent scan results so it doesn't reappear on reload
+            const currentSettings = await db.settings.findUnique({ where: { shop } });
+            if (currentSettings && currentSettings.lastScanResults) {
+                try {
+                    const parsedResults = JSON.parse(currentSettings.lastScanResults);
+                    const updatedResults = parsedResults.filter((p: any) => p.id !== product.id);
+                    await db.settings.update({
+                        where: { shop },
+                        data: { lastScanResults: JSON.stringify(updatedResults) }
+                    });
+                } catch (e) {
+                    console.error("Failed to update lastScanResults after deactivation", e);
+                }
+            }
         }
 
         return json({ success: true, processedProduct: product });

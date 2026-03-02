@@ -407,7 +407,7 @@ export default function ManualScanPage() {
                                         labelHidden
                                         placeholder="Threshold"
                                         suffix="days"
-                                        helpText="Older than"
+                                        helpText="Products that have been out of stock for more than:"
                                     />
                                 </div>
                                 <Box paddingBlockStart="050">

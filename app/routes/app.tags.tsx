@@ -53,6 +53,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         variants(first: 10) { 
                             nodes { 
                                 sku 
+                                inventoryQuantity
                             } 
                         }
                     }
@@ -278,6 +279,7 @@ export default function TagsPage() {
                                             { title: 'Image' },
                                             { title: 'Product' },
                                             { title: 'SKUs found' },
+                                            { title: 'Stock' },
                                             { title: 'Status' },
                                         ]}
                                     >
@@ -306,6 +308,11 @@ export default function TagsPage() {
                                                     </IndexTable.Cell>
                                                     <IndexTable.Cell>
                                                         {skusDisplay}
+                                                    </IndexTable.Cell>
+                                                    <IndexTable.Cell>
+                                                        <Text variant="bodyMd" as="span" fontWeight="bold">
+                                                            {product.variants?.nodes ? product.variants.nodes.reduce((acc: number, v: any) => acc + (v.inventoryQuantity || 0), 0) : 0}
+                                                        </Text>
                                                     </IndexTable.Cell>
                                                     <IndexTable.Cell>
                                                         <Badge tone={product.status === "ACTIVE" ? "success" : "info"}>

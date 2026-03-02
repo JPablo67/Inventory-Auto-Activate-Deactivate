@@ -34,6 +34,7 @@ interface Settings {
     minDaysInactive: number;
     lastScanType?: string;
     lastScanResults?: string;
+    lastManualScanDays?: number | null;
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -107,14 +108,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             update: {
                 lastRunAt: new Date(),
                 lastScanType: 'MANUAL',
-                lastScanResults: JSON.stringify(candidates)
+                lastScanResults: JSON.stringify(candidates),
+                lastManualScanDays: days
             },
             create: {
                 shop: settingsSession.shop,
                 isActive: false,
                 lastRunAt: new Date(),
                 lastScanType: 'MANUAL',
-                lastScanResults: JSON.stringify(candidates)
+                lastScanResults: JSON.stringify(candidates),
+                lastManualScanDays: days
             }
         });
 
@@ -228,7 +231,7 @@ export default function ManualScanPage() {
         clearSelection: clearCandidateSelection
     } = useIndexResourceState(visibleItems);
 
-    const [daysThreshold, setDaysThreshold] = useState("90");
+    const [daysThreshold, setDaysThreshold] = useState(typedSettings?.lastManualScanDays?.toString() || "90");
     const [deactivatingIds, setDeactivatingIds] = useState<Set<string>>(new Set());
     const [completedProducts, setCompletedProducts] = useState<any[]>([]);
     const [isBatchProcessing, setIsBatchProcessing] = useState(false);

@@ -106,17 +106,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         await db.settings.upsert({
             where: { shop: settingsSession.shop },
             update: {
-                lastRunAt: new Date(),
-                lastScanType: 'MANUAL',
-                lastScanResults: JSON.stringify(candidates),
+                lastManualRunAt: new Date(),
+                lastManualScanResults: JSON.stringify(candidates),
                 lastManualScanDays: days
             },
             create: {
                 shop: settingsSession.shop,
                 isActive: false,
-                lastRunAt: new Date(),
-                lastScanType: 'MANUAL',
-                lastScanResults: JSON.stringify(candidates),
+                lastManualRunAt: new Date(),
+                lastManualScanResults: JSON.stringify(candidates),
                 lastManualScanDays: days
             }
         });
@@ -172,14 +170,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             });
 
             // Remove the product from persistent scan results so it doesn't reappear on reload
-            const currentSettings = await db.settings.findUnique({ where: { shop } });
-            if (currentSettings && currentSettings.lastScanResults) {
+            if (currentSettings && currentSettings.lastManualScanResults) {
                 try {
-                    const parsedResults = JSON.parse(currentSettings.lastScanResults);
+                    const parsedResults = JSON.parse(currentSettings.lastManualScanResults);
                     const updatedResults = parsedResults.filter((p: any) => p.id !== product.id);
                     await db.settings.update({
                         where: { shop },
-                        data: { lastScanResults: JSON.stringify(updatedResults) }
+                        data: { lastManualScanResults: JSON.stringify(updatedResults) }
                     });
                 } catch (e) {
                     console.error("Failed to update lastScanResults after deactivation", e);
@@ -214,15 +211,13 @@ export default function ManualScanPage() {
     const typedSettings = settings as Settings | null;
 
     // Resolve items to display
-    const persistentResults = typedSettings?.lastScanResults ? JSON.parse(typedSettings.lastScanResults) : [];
-    const persistentType = typedSettings?.lastScanType;
+    const persistentResults = typedSettings?.lastManualScanResults ? JSON.parse(typedSettings.lastManualScanResults) : [];
 
     const activeCandidates = (actionData as any)?.candidates || [];
     const hasActiveCandidates = activeCandidates.length > 0;
     const visibleItems = hasActiveCandidates ? activeCandidates : persistentResults;
 
-    const isManualMode = hasActiveCandidates || (visibleItems.length > 0 && persistentType === 'MANUAL');
-    const isReadonly = !isManualMode && visibleItems.length > 0 && persistentType === 'AUTO';
+    const isReadonly = false;
 
     const {
         selectedResources: selectedCandidates,
@@ -380,17 +375,14 @@ export default function ManualScanPage() {
                                     Identify and set to Draft products that have been out of stock for a long time.
                                     Products are never deleted.
                                 </Text>
-                                {typedSettings?.lastRunAt && (
+                                {typedSettings?.lastManualRunAt && (
                                     <div style={{ marginTop: '0.5rem' }}>
                                         <BlockStack gap="100">
                                             <Text as="span" variant="bodySm" tone="subdued">Last Scan:</Text>
                                             <InlineStack gap="200" align="start" blockAlign="center">
                                                 <Text as="span" variant="bodyMd" fontWeight="bold">
-                                                    {new Date(typedSettings.lastRunAt).toLocaleString()}
+                                                    {new Date(typedSettings.lastManualRunAt).toLocaleString()}
                                                 </Text>
-                                                <Badge tone={typedSettings.lastScanType === 'AUTO' ? 'magic' : 'attention'}>
-                                                    {typedSettings.lastScanType === 'AUTO' ? 'Auto-Scan' : 'Manual Scan'}
-                                                </Badge>
                                             </InlineStack>
                                         </BlockStack>
                                     </div>

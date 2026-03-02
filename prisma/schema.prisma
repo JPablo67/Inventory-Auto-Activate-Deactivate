@@ -55,7 +55,9 @@ model Settings {
   autoReactivate  Boolean  @default(false)
   lastRunAt       DateTime?
   lastScanType    String?  // "AUTO" or "MANUAL"
-  lastScanResults String?  // JSON string of products found/actioned
+  lastScanResults String?  // JSON string of products found/actioned (auto)
+  lastManualRunAt DateTime?
+  lastManualScanResults String? // JSON string of products found/actioned (manual)
   lastManualScanDays Int?  // Remember last manual scan days threshold
   currentStatus   String   @default("IDLE") // "IDLE", "SCANNING", "DEACTIVATING"
   createdAt       DateTime @default(now())

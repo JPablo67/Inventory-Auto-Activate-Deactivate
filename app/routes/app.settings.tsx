@@ -94,6 +94,7 @@ export default function SettingsPage() {
     const [autoMinDays, setAutoMinDays] = useState(settings?.minDaysInactive?.toString() || "90");
     const [frequency, setFrequency] = useState(settings?.frequency?.toString() || "1");
     const [frequencyUnit, setFrequencyUnit] = useState(settings?.frequencyUnit || "days");
+    const [isAutoScanResultsExpanded, setIsAutoScanResultsExpanded] = useState(false);
 
     // Timer calculation logic (reused from index)
     const [timeLeft, setTimeLeft] = useState<string | null>(null);
@@ -348,7 +349,7 @@ export default function SettingsPage() {
                                                 ]}
                                                 selectable={false}
                                             >
-                                                {results.slice(0, 5).map((product: any, index: number) => {
+                                                {results.slice(0, isAutoScanResultsExpanded ? results.length : 5).map((product: any, index: number) => {
                                                     const sku = product.sku || product.variants?.nodes?.[0]?.sku || '-';
                                                     return (
                                                         <IndexTable.Row id={product.id || index.toString()} key={product.id || index} position={index}>
@@ -361,8 +362,19 @@ export default function SettingsPage() {
                                                     );
                                                 })}
                                             </IndexTable>
-                                            {count > 5 && (
-                                                <Text as="p" tone="subdued" alignment="center">...and {count - 5} more.</Text>
+                                            {count > 5 && !isAutoScanResultsExpanded && (
+                                                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+                                                    <Button variant="plain" onClick={() => setIsAutoScanResultsExpanded(true)}>
+                                                        {`Expand ${count - 5} more`}
+                                                    </Button>
+                                                </div>
+                                            )}
+                                            {isAutoScanResultsExpanded && count > 5 && (
+                                                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+                                                    <Button variant="plain" onClick={() => setIsAutoScanResultsExpanded(false)}>
+                                                        Show less
+                                                    </Button>
+                                                </div>
                                             )}
                                         </>
                                     );

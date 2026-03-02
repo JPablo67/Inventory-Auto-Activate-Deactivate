@@ -5,9 +5,17 @@ import db from "../db.server";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { session, admin } = await shopify.authenticate.admin(request);
 
-    // Fetch all logs
+    const url = new URL(request.url);
+    const methodFilter = url.searchParams.get("method");
+    const actionFilter = url.searchParams.get("action");
+
+    const whereClause: any = { shop: session.shop };
+    if (methodFilter) whereClause.method = methodFilter;
+    if (actionFilter) whereClause.action = actionFilter;
+
+    // Fetch logs
     const logs = await db.activityLog.findMany({
-        where: { shop: session.shop },
+        where: whereClause,
         orderBy: { createdAt: 'desc' },
         take: 10
     });

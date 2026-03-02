@@ -45,7 +45,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     // 2. Fetch Activity Log
     const logs = await db.activityLog.findMany({
-        where: { shop: session.shop },
+        where: { shop: session.shop, method: 'MANUAL', action: 'DEACTIVATE' },
         take: 10,
         orderBy: { createdAt: "desc" },
     });

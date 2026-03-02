@@ -77,14 +77,14 @@ export default function SettingsPage() {
     useEffect(() => {
         // Initial load
         if (logsFetcher.state === 'idle' && !logsFetcher.data) {
-            logsFetcher.load('/api/logs');
+            logsFetcher.load('/api/logs?method=AUTO&action=AUTO-DEACTIVATE');
             return;
         }
 
         // Real-time update check
         if (latestLogIdFromStatus && latestLogIdFromStatus !== currentLatestLogId && logsFetcher.state === 'idle') {
             console.log("New activity detected! Refreshing logs...", latestLogIdFromStatus, currentLatestLogId);
-            logsFetcher.load('/api/logs');
+            logsFetcher.load('/api/logs?method=AUTO&action=AUTO-DEACTIVATE');
         }
     }, [latestLogIdFromStatus, currentLatestLogId, logsFetcher.state]);
 

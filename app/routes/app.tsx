@@ -28,6 +28,7 @@ export default function App() {
         <Link to="/app/activity">Activity Log</Link>
         <Link to="/app/settings">Auto-Deactivate</Link>
         <Link to="/app/manual">Manual Scan</Link>
+        <Link to="/app/tags">Bulk Tags</Link>
       </NavMenu>
       <Outlet />
     </AppProvider>

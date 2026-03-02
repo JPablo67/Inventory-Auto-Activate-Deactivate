@@ -391,89 +391,98 @@ export default function SettingsPage() {
                                 {(!logs || logs.length === 0) && logsFetcher.state === 'loading' ? (
                                     <div style={{ display: "flex", justifyContent: "center", padding: "20px" }}><Spinner /></div>
                                 ) : logs && logs.length > 0 ? (
-                                    <IndexTable
-                                        resourceName={{ singular: 'log', plural: 'logs' }}
-                                        itemCount={logs.length}
-                                        selectedItemsCount={0}
-                                        onSelectionChange={() => { }}
-                                        headings={[
-                                            { title: 'Date & Time' },
-                                            { title: 'Action' },
-                                            { title: 'Method' },
-                                            { title: 'SKU' },
-                                            { title: 'Name' },
-                                            { title: 'ID' },
-                                        ]}
-                                        selectable={false}
-                                    >
-                                        {logs.map((log: any, index: number) => {
-                                            const product = log.productDetails;
-                                            const dateStr = new Date(log.createdAt).toLocaleString();
+                                    <>
+                                        <IndexTable
+                                            resourceName={{ singular: 'log', plural: 'logs' }}
+                                            itemCount={logs.length}
+                                            selectedItemsCount={0}
+                                            onSelectionChange={() => { }}
+                                            headings={[
+                                                { title: 'Date & Time' },
+                                                { title: 'Action' },
+                                                { title: 'Method' },
+                                                { title: 'SKU' },
+                                                { title: 'Name' },
+                                                { title: 'ID' },
+                                            ]}
+                                            selectable={false}
+                                        >
+                                            {logs.map((log: any, index: number) => {
+                                                const product = log.productDetails;
+                                                const dateStr = new Date(log.createdAt).toLocaleString();
 
-                                            // Action Label
-                                            let actionLabel = log.action;
-                                            let badgeTone: "success" | "critical" | "info" | "attention" | "magic" = "info";
-                                            if (log.action === 'AUTO-DEACTIVATE') { actionLabel = 'Deactivated'; badgeTone = 'info'; }
-                                            else if (log.action === 'DEACTIVATE') { actionLabel = 'Deactivated'; badgeTone = 'info'; }
-                                            else if (log.action === 'REACTIVATE') { actionLabel = 'Reactivated'; badgeTone = 'success'; }
+                                                // Action Label
+                                                let actionLabel = log.action;
+                                                let badgeTone: "success" | "critical" | "info" | "attention" | "magic" = "info";
+                                                if (log.action === 'AUTO-DEACTIVATE') { actionLabel = 'Deactivated'; badgeTone = 'info'; }
+                                                else if (log.action === 'DEACTIVATE') { actionLabel = 'Deactivated'; badgeTone = 'info'; }
+                                                else if (log.action === 'REACTIVATE') { actionLabel = 'Reactivated'; badgeTone = 'success'; }
 
-                                            // Method Label
-                                            let methodLabel = log.method;
-                                            let methodTone: "success" | "critical" | "info" | "attention" | "magic" = "subdued" as any; // default
+                                                // Method Label
+                                                let methodLabel = log.method;
+                                                let methodTone: "success" | "critical" | "info" | "attention" | "magic" = "subdued" as any; // default
 
-                                            if (methodLabel === 'WEBHOOK' || methodLabel === 'AUTO') {
-                                                methodLabel = 'Auto';
-                                                methodTone = 'magic';
-                                            } else if (methodLabel === 'MANUAL') {
-                                                methodLabel = 'Manual';
-                                                methodTone = 'attention';
-                                            }
+                                                if (methodLabel === 'WEBHOOK' || methodLabel === 'AUTO') {
+                                                    methodLabel = 'Auto';
+                                                    methodTone = 'magic';
+                                                } else if (methodLabel === 'MANUAL') {
+                                                    methodLabel = 'Manual';
+                                                    methodTone = 'attention';
+                                                }
 
-                                            // Product Details
-                                            const image = product?.featuredImage?.url;
-                                            const sku = log.productSku || product?.variants?.nodes?.[0]?.sku || '-';
-                                            const name = log.productTitle || product?.title || 'Unknown Product';
-                                            const id = log.productId;
+                                                // Product Details
+                                                const image = product?.featuredImage?.url;
+                                                const sku = log.productSku || product?.variants?.nodes?.[0]?.sku || '-';
+                                                const name = log.productTitle || product?.title || 'Unknown Product';
+                                                const id = log.productId;
 
-                                            return (
-                                                <IndexTable.Row id={log.id.toString()} key={log.id} position={index}>
-                                                    <IndexTable.Cell>
-                                                        {dateStr}
-                                                    </IndexTable.Cell>
-                                                    <IndexTable.Cell>
-                                                        <Badge tone={badgeTone}>{actionLabel}</Badge>
-                                                    </IndexTable.Cell>
-                                                    <IndexTable.Cell>
-                                                        <Badge tone={methodTone}>{methodLabel}</Badge>
-                                                    </IndexTable.Cell>
-                                                    <IndexTable.Cell>
-                                                        <Text variant="bodySm" as="span" fontWeight="bold">{sku}</Text>
-                                                    </IndexTable.Cell>
-                                                    <IndexTable.Cell>
-                                                        <InlineStack gap="300" blockAlign="start" wrap={false}>
-                                                            <div>
-                                                                {image ? (
-                                                                    <Thumbnail
-                                                                        source={image}
-                                                                        alt={name}
-                                                                        size="small"
-                                                                    />
-                                                                ) : (
-                                                                    <div style={{ width: 40, height: 40, background: "#f1f1f1", borderRadius: 4 }}></div>
-                                                                )}
-                                                            </div>
-                                                            <div style={{ flex: 1, minWidth: 0, wordBreak: "break-word", whiteSpace: "normal" }}>
-                                                                <Text variant="bodyMd" as="span">{name}</Text>
-                                                            </div>
-                                                        </InlineStack>
-                                                    </IndexTable.Cell>
-                                                    <IndexTable.Cell>
-                                                        <Text variant="bodySm" as="span" tone="subdued">{id.split("/").pop()}</Text>
-                                                    </IndexTable.Cell>
-                                                </IndexTable.Row>
-                                            );
-                                        })}
-                                    </IndexTable>
+                                                return (
+                                                    <IndexTable.Row id={log.id.toString()} key={log.id} position={index}>
+                                                        <IndexTable.Cell>
+                                                            {dateStr}
+                                                        </IndexTable.Cell>
+                                                        <IndexTable.Cell>
+                                                            <Badge tone={badgeTone}>{actionLabel}</Badge>
+                                                        </IndexTable.Cell>
+                                                        <IndexTable.Cell>
+                                                            <Badge tone={methodTone}>{methodLabel}</Badge>
+                                                        </IndexTable.Cell>
+                                                        <IndexTable.Cell>
+                                                            <Text variant="bodySm" as="span" fontWeight="bold">{sku}</Text>
+                                                        </IndexTable.Cell>
+                                                        <IndexTable.Cell>
+                                                            <InlineStack gap="300" blockAlign="start" wrap={false}>
+                                                                <div>
+                                                                    {image ? (
+                                                                        <Thumbnail
+                                                                            source={image}
+                                                                            alt={name}
+                                                                            size="small"
+                                                                        />
+                                                                    ) : (
+                                                                        <div style={{ width: 40, height: 40, background: "#f1f1f1", borderRadius: 4 }}></div>
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ flex: 1, minWidth: 0, wordBreak: "break-word", whiteSpace: "normal" }}>
+                                                                    <Text variant="bodyMd" as="span">{name}</Text>
+                                                                </div>
+                                                            </InlineStack>
+                                                        </IndexTable.Cell>
+                                                        <IndexTable.Cell>
+                                                            <Text variant="bodySm" as="span" tone="subdued">{id.split("/").pop()}</Text>
+                                                        </IndexTable.Cell>
+                                                    </IndexTable.Row>
+                                                );
+                                            })}
+                                        </IndexTable>
+                                        {logs.length >= 10 && (
+                                            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', paddingBottom: '1rem' }}>
+                                                <Button url="/app/activity" variant="plain">
+                                                    View all activity
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </>
                                 ) : (
                                     <Text as="p" tone="subdued">No recent activity.</Text>
                                 )}

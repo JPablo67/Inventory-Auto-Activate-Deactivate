@@ -9,7 +9,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const logs = await db.activityLog.findMany({
         where: { shop: session.shop },
         orderBy: { createdAt: 'desc' },
-        take: 1000
+        take: 10
     });
 
     // Enrich logs with Shopify Product Data

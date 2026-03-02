@@ -46,7 +46,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // 2. Fetch Activity Log
     const logs = await db.activityLog.findMany({
         where: { shop: session.shop },
-        take: 20, // Fetch more for the dedicated manual page? Or keep 10? User said "same data". Let's keep 20 to be safe/better.
+        take: 10,
         orderBy: { createdAt: "desc" },
     });
 
@@ -560,6 +560,13 @@ export default function ManualScanPage() {
                                     );
                                 })}
                             </IndexTable>
+                            {logs && logs.length >= 10 && (
+                            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', paddingBottom: '1rem' }}>
+                                <Button url="/app/activity" variant="plain">
+                                    View all activity
+                                </Button>
+                            </div>
+                        )}
                         )}
                     </BlockStack>
                 </Card>

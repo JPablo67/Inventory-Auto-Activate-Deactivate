@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useActionData, useLoaderData, useSubmit, useNavigation, Link as RemixLink } from "@remix-run/react";
+import { useActionData, useLoaderData, useSubmit, useNavigation, Link as RemixLink, useRevalidator } from "@remix-run/react";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import {
     Page,
@@ -18,6 +18,7 @@ import {
     useIndexResourceState,
     Thumbnail,
     TextField,
+    Spinner,
 } from "@shopify/polaris";
 import { ImageIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
@@ -148,6 +149,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return json({ success: true, deactivatedCount: ids.length, ids });
     }
 
+    if (actionType === "deactivateSingle") {
+        const productString = formData.get("product") as string;
+        const product = JSON.parse(productString || "{}");
+
+        if (product.id) {
+            await deactivateProducts(request, [product.id]);
+
+            const shop = settingsSession.shop;
+            await db.activityLog.create({
+                data: {
+                    shop,
+                    productId: product.id,
+                    productTitle: product.title,
+                    productSku: product.sku,
+                    method: "MANUAL",
+                    action: "DEACTIVATE",
+                }
+            });
+        }
+
+        return json({ success: true, processedProduct: product });
+    }
+
     if (actionType === "clearLogs") {
         await db.activityLog.deleteMany({
             where: { shop: settingsSession.shop }
@@ -167,7 +191,7 @@ export default function ManualScanPage() {
 
     const isLoading = navigation.state === "submitting" || navigation.state === "loading";
     const isScanning = isLoading && navigation.formData?.get("actionType") === "scan";
-    const isDeactivating = isLoading && navigation.formData?.get("actionType") === "deactivate";
+    const revalidator = useRevalidator();
 
     const typedSettings = settings as Settings | null;
 
@@ -190,6 +214,9 @@ export default function ManualScanPage() {
     } = useIndexResourceState(visibleItems);
 
     const [daysThreshold, setDaysThreshold] = useState("90");
+    const [deactivatingIds, setDeactivatingIds] = useState<Set<string>>(new Set());
+    const [completedProducts, setCompletedProducts] = useState<any[]>([]);
+    const [isBatchProcessing, setIsBatchProcessing] = useState(false);
 
     useEffect(() => {
         if ((actionData as any)?.deactivatedCount) {
@@ -202,16 +229,50 @@ export default function ManualScanPage() {
         submit({ actionType: "scan", days: daysThreshold }, { method: "POST" });
     };
 
-    const handleDeactivate = () => {
+    const handleDeactivate = async () => {
         const selectedProducts = visibleItems
             .filter((item: any) => selectedCandidates.includes(item.id))
             .map((item: any) => ({
                 id: item.id,
                 title: item.title,
-                sku: item.variants?.nodes?.[0]?.sku || ""
+                sku: item.variants?.nodes?.[0]?.sku || "",
+                featuredImage: item.featuredImage
             }));
 
-        submit({ actionType: "deactivate", selectedProducts: JSON.stringify(selectedProducts) }, { method: "POST" });
+        if (selectedProducts.length === 0) return;
+
+        setIsBatchProcessing(true);
+
+        for (const product of selectedProducts) {
+            setDeactivatingIds(prev => new Set(prev).add(product.id));
+
+            const formData = new FormData();
+            formData.append("actionType", "deactivateSingle");
+            formData.append("product", JSON.stringify(product));
+
+            try {
+                const response = await fetch("?index", {
+                    method: "POST",
+                    body: formData,
+                });
+                if (response.ok) {
+                    setCompletedProducts(prev => [product, ...prev]);
+                }
+            } catch (err) {
+                console.error("Failed to deactivate", product.title);
+            } finally {
+                setDeactivatingIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(product.id);
+                    return next;
+                });
+            }
+        }
+
+        setIsBatchProcessing(false);
+        clearCandidateSelection();
+        shopify.toast.show(`Processed ${selectedProducts.length} products`);
+        revalidator.revalidate(); // Refresh loaders
     };
 
     const handleClearLogs = () => {
@@ -220,34 +281,72 @@ export default function ManualScanPage() {
         }
     };
 
-    const renderCandidateRow = (product: any, index: number) => (
-        <IndexTable.Row
-            id={product.id}
-            key={product.id}
-            selected={selectedCandidates.includes(product.id)}
-            position={index}
-        >
-            <IndexTable.Cell>
-                <Thumbnail
-                    source={product.featuredImage?.url || ImageIcon}
-                    alt={product.title}
-                    size="small"
-                />
-            </IndexTable.Cell>
-            <IndexTable.Cell>
-                <Text variant="bodyMd" as="span">
-                    {product.title}
-                </Text>
-            </IndexTable.Cell>
-            <IndexTable.Cell>
-                {product.sku}
-            </IndexTable.Cell>
-            <IndexTable.Cell>
-                <Badge tone="critical">{`${product.daysInactive?.toString()} days with no stock`}</Badge>
-            </IndexTable.Cell>
-            <IndexTable.Cell>Active</IndexTable.Cell>
-        </IndexTable.Row>
-    );
+    const renderCandidateRow = (product: any, index: number) => {
+        const isDeactivatingThis = deactivatingIds.has(product.id);
+
+        return (
+            <IndexTable.Row
+                id={product.id}
+                key={product.id}
+                selected={selectedCandidates.includes(product.id)}
+                position={index}
+                disabled={isBatchProcessing} // prevent selection changes while processing
+            >
+                <IndexTable.Cell>
+                    <Thumbnail
+                        source={product.featuredImage?.url || ImageIcon}
+                        alt={product.title}
+                        size="small"
+                    />
+                </IndexTable.Cell>
+                <IndexTable.Cell>
+                    <Text variant="bodyMd" as="span">
+                        {product.title}
+                    </Text>
+                </IndexTable.Cell>
+                <IndexTable.Cell>
+                    {product.sku}
+                </IndexTable.Cell>
+                <IndexTable.Cell>
+                    {isDeactivatingThis ? (
+                        <InlineStack gap="200" blockAlign="center">
+                            <Spinner size="small" />
+                            <Text variant="bodySm" as="span" tone="subdued">Drafting...</Text>
+                        </InlineStack>
+                    ) : (
+                        <Badge tone="critical">{`${product.daysInactive?.toString()} days with no stock`}</Badge>
+                    )}
+                </IndexTable.Cell>
+                <IndexTable.Cell>
+                    {isDeactivatingThis ? <Badge tone="info">Updating</Badge> : "Active"}
+                </IndexTable.Cell>
+            </IndexTable.Row>
+        );
+    };
+
+    // Calculate lists for display
+    const realVisibleItems = visibleItems.filter((item: any) => !completedProducts.some(p => p.id === item.id));
+
+    // Deduped optimistic logs
+    const optimisticLogs = completedProducts.map((p, index) => ({
+        id: `opt-${index}-${p.id}`,
+        createdAt: new Date().toISOString(),
+        action: 'DEACTIVATE',
+        method: 'MANUAL',
+        productSku: p.sku,
+        productTitle: p.title,
+        productId: p.id,
+        productDetails: {
+            featuredImage: p.featuredImage,
+            title: p.title
+        }
+    }));
+
+    // Merge logs ensuring no temporary duplicates
+    const combinedLogs = [
+        ...optimisticLogs.filter(opt => !logs.some((l: any) => l.productId === opt.productId && l.action === 'DEACTIVATE' && new Date(l.createdAt).getTime() > Date.now() - 5 * 60 * 1000)),
+        ...logs
+    ].slice(0, 20);
 
     return (
         <Page title="Manual Scan & Cleanup">
@@ -294,25 +393,24 @@ export default function ManualScanPage() {
                                     />
                                 </div>
                                 <Box paddingBlockStart="050">
-                                    <Button variant="primary" onClick={handleScan} loading={isScanning} disabled={isDeactivating}>
-                                        {/* To disable: add 'disabled' prop above and remove 'disabled={isDeactivating}' */}
+                                    <Button variant="primary" onClick={handleScan} loading={isScanning} disabled={isBatchProcessing}>
                                         Scan Now
                                     </Button>
                                 </Box>
                             </InlineStack>
                         </div>
 
-                        {visibleItems.length > 0 && (
+                        {realVisibleItems.length > 0 && (
                             <BlockStack gap="400">
                                 <Banner tone={isReadonly ? "info" : "warning"}>
                                     {isReadonly
-                                        ? `Last Auto-Scan moved ${visibleItems.length} products to Draft.`
-                                        : `Found ${visibleItems.length} products eligible for Draft mode. Select to process.`
+                                        ? `Last Auto-Scan moved ${realVisibleItems.length} products to Draft.`
+                                        : `Found ${realVisibleItems.length} products eligible for Draft mode. Select to process.`
                                     }
                                 </Banner>
                                 <IndexTable
                                     resourceName={{ singular: 'product', plural: 'products' }}
-                                    itemCount={visibleItems.length}
+                                    itemCount={realVisibleItems.length}
                                     selectedItemsCount={
                                         allCandidatesSelected ? 'All' : selectedCandidates.length
                                     }
@@ -329,12 +427,11 @@ export default function ManualScanPage() {
                                         {
                                             content: 'Change to Draft',
                                             onAction: handleDeactivate,
-                                            // @ts-expect-error loading sometimes mismatches in types
-                                            loading: isDeactivating
+                                            disabled: isBatchProcessing
                                         },
                                     ]}
                                 >
-                                    {visibleItems.map(renderCandidateRow)}
+                                    {realVisibleItems.map(renderCandidateRow)}
                                 </IndexTable>
                             </BlockStack>
                         )}
@@ -360,12 +457,12 @@ export default function ManualScanPage() {
                                 </Button>
                             )}
                         </InlineStack>
-                        {logs.length === 0 ? (
+                        {combinedLogs.length === 0 ? (
                             <Text as="p" tone="subdued">No activity yet.</Text>
                         ) : (
                             <IndexTable
                                 resourceName={{ singular: 'log', plural: 'logs' }}
-                                itemCount={logs.length}
+                                itemCount={combinedLogs.length}
                                 selectedItemsCount={0}
                                 onSelectionChange={() => { }}
                                 headings={[
@@ -378,7 +475,7 @@ export default function ManualScanPage() {
                                 ]}
                                 selectable={false}
                             >
-                                {logs.map((log: any, index: number) => {
+                                {combinedLogs.map((log: any, index: number) => {
                                     const product = log.productDetails;
                                     const dateStr = new Date(log.createdAt).toLocaleString();
 
@@ -411,7 +508,7 @@ export default function ManualScanPage() {
                                     return (
                                         <IndexTable.Row id={log.id.toString()} key={log.id} position={index}>
                                             <IndexTable.Cell>
-                                                {dateStr}
+                                                {dateStr === "Invalid Date" ? "Just Now" : dateStr}
                                             </IndexTable.Cell>
                                             <IndexTable.Cell>
                                                 <Badge tone={badgeTone}>{actionLabel}</Badge>

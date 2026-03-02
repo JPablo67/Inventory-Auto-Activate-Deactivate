@@ -203,18 +203,26 @@ export default function ActivityLogPage() {
 
                                             // Method Label
                                             let methodLabel = log.method;
+                                            let methodTone: "success" | "critical" | "info" | "attention" | "magic" = "subdued" as any;
+
                                             // Normalize Webhook/Auto to "Auto"
                                             if (methodLabel === 'WEBHOOK' || methodLabel === 'AUTO') {
                                                 methodLabel = 'Auto';
+                                                methodTone = 'magic';
                                             } else if (methodLabel === 'MANUAL') {
                                                 methodLabel = 'Manual';
+                                                methodTone = 'attention';
                                             }
                                             // Fallback
                                             if (!methodLabel) {
-                                                if (log.action === 'AUTO-DEACTIVATE' || log.action === 'REACTIVATE') methodLabel = 'Auto';
-                                                else methodLabel = 'Manual';
+                                                if (log.action === 'AUTO-DEACTIVATE' || log.action === 'REACTIVATE') {
+                                                    methodLabel = 'Auto';
+                                                    methodTone = 'magic';
+                                                } else {
+                                                    methodLabel = 'Manual';
+                                                    methodTone = 'attention';
+                                                }
                                             }
-                                            const methodTone = methodLabel === 'Auto' ? 'magic' : 'info';
 
                                             // SKU & Name
                                             const sku = log.productSku || product?.variants?.nodes?.[0]?.sku || "-";

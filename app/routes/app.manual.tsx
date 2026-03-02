@@ -506,18 +506,24 @@ export default function ManualScanPage() {
 
                                     // Method Label
                                     let methodLabel = log.method;
+                                    let methodTone: "success" | "critical" | "info" | "attention" | "magic" = "subdued" as any;
 
                                     if (methodLabel === 'WEBHOOK' || methodLabel === 'AUTO') {
                                         methodLabel = 'Auto';
+                                        methodTone = 'magic';
                                     } else if (methodLabel === 'MANUAL') {
                                         methodLabel = 'Manual';
+                                        methodTone = 'attention';
                                     }
                                     if (!methodLabel) {
-                                        if (log.action === 'AUTO-DEACTIVATE' || log.action === 'REACTIVATE') methodLabel = 'Auto';
-                                        else methodLabel = 'Manual';
+                                        if (log.action === 'AUTO-DEACTIVATE' || log.action === 'REACTIVATE') {
+                                            methodLabel = 'Auto';
+                                            methodTone = 'magic';
+                                        } else {
+                                            methodLabel = 'Manual';
+                                            methodTone = 'attention';
+                                        }
                                     }
-
-                                    const methodTone = methodLabel === 'Auto' ? 'magic' : 'info';
                                     const image = product?.featuredImage?.url;
                                     const sku = log.productSku || product?.variants?.nodes?.[0]?.sku || "-";
                                     const name = log.productTitle || product?.title || "Unknown Product";

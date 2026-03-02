@@ -396,8 +396,11 @@ export default function ManualScanPage() {
                                     </div>
                                 )}
                             </BlockStack>
-                            <InlineStack gap="300" align="end">
-                                <div style={{ width: "150px" }}>
+                            <InlineStack gap="300" align="end" blockAlign="center">
+                                <Text as="span" variant="bodyMd">
+                                    Products that have been out of stock for more than:
+                                </Text>
+                                <div style={{ width: "120px" }}>
                                     <TextField
                                         label="Days Inactive"
                                         type="number"
@@ -407,14 +410,11 @@ export default function ManualScanPage() {
                                         labelHidden
                                         placeholder="Threshold"
                                         suffix="days"
-                                        helpText="Products that have been out of stock for more than:"
                                     />
                                 </div>
-                                <Box paddingBlockStart="050">
-                                    <Button variant="primary" onClick={handleScan} loading={isScanning} disabled={isBatchProcessing}>
-                                        Scan Now
-                                    </Button>
-                                </Box>
+                                <Button variant="primary" onClick={handleScan} loading={isScanning} disabled={isBatchProcessing}>
+                                    Scan Now
+                                </Button>
                             </InlineStack>
                         </div>
 

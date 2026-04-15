@@ -13,9 +13,10 @@ services:
       - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U inventory_app -d inventory_deactivator"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
 
   app:
     container_name: inventory-deactivator

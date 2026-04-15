@@ -42,7 +42,7 @@ function scheduleNextRun() {
             global.__isScanning = false;
             scheduleNextRun();
         }
-    }, 30 * 1000);
+    }, 5 * 60 * 1000); // Check every 5 minutes (shouldRun() gates actual execution)
 }
 
 async function runAutoScan() {
@@ -74,12 +74,18 @@ async function runAutoScan() {
                     const deactivatedItems = await executeScanForShop(settings.shop, settings.minDaysInactive);
 
                     // Update lastRunAt, Type, and IDLE
+                    // Store only the fields needed for display, not full GraphQL objects
+                    const slimResults = (deactivatedItems || []).map((p: any) => ({
+                        id: p.id,
+                        title: p.title,
+                        sku: p.variants?.nodes?.[0]?.sku || "",
+                    }));
                     await db.settings.update({
                         where: { shop: settings.shop },
                         data: {
                             lastRunAt: now,
                             lastScanType: 'AUTO',
-                            lastScanResults: JSON.stringify(deactivatedItems || []),
+                            lastScanResults: JSON.stringify(slimResults),
                             currentStatus: "IDLE"
                         }
                     });
@@ -300,8 +306,6 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
 
 
     }
-
-    return deactivatedItems;
 
     return deactivatedItems;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { useActionData, useLoaderData, useSubmit, useNavigation, useSearchParams, Link as RemixLink, useRevalidator, useFetcher } from "@remix-run/react";
+import { useActionData, useLoaderData, useSubmit, useNavigation, useNavigate, useSearchParams, Link as RemixLink, useRevalidator, useFetcher } from "@remix-run/react";
 import {
   Page,
   Layout,
@@ -21,6 +21,7 @@ import {
   Select,
   Checkbox,
   ProgressBar,
+  Pagination,
 } from "@shopify/polaris";
 import { ImageIcon } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
@@ -47,7 +48,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // 1. Fetch Metrics (Always needed for the top bar if we want it persistent, or just for dashboard)
   let stats = { active: 0, draft: 0, archived: 0, activeNoStock: 0, inactiveWithStock: 0 };
-  let productList = [];
+  let productList: any[] = [];
+  let pageInfo = { hasNextPage: false, hasPreviousPage: false, endCursor: null as string | null, startCursor: null as string | null };
 
   if (!view) {
     const queries = [
@@ -77,8 +79,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       inactiveWithStock: (results[4] as any).data?.productsCount?.count || 0,
     };
   } else {
-    // If we are in a view, fetch the products
-    productList = await getProductsByStatus(request, view);
+    // If we are in a view, fetch the products with cursor pagination
+    const cursor = url.searchParams.get("cursor");
+    const result = await getProductsByStatus(request, view, cursor);
+    productList = result.nodes;
+    pageInfo = result.pageInfo;
   }
 
   // 2. Fetch Activity Log
@@ -131,7 +136,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // 3. Fetch Settings
   const settings = await db.settings.findUnique({ where: { shop: session.shop } });
 
-  return { stats, logs: enrichedLogs, productList, view, settings };
+  return { stats, logs: enrichedLogs, productList, pageInfo, view, settings };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -165,7 +170,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (actionType === "deactivate") {
     const productsString = formData.get("selectedProducts") as string;
-    const products = JSON.parse(productsString || "[]");
+    let products;
+    try { products = JSON.parse(productsString || "[]"); } catch { return { success: false, error: "Invalid product data" }; }
 
     // Extract IDs for the service call
     const ids = products.map((p: any) => p.id);
@@ -227,12 +233,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Index() {
-  const { stats: initialStats, logs, productList, view, settings } = useLoaderData<typeof loader>();
+  const { stats: initialStats, logs, productList, pageInfo, view, settings } = useLoaderData<typeof loader>();
   const statsFetcher = useFetcher<any>();
   const currentStats = statsFetcher.data?.stats || initialStats;
   const actionData = useActionData<typeof action>();
   const submit = useSubmit();
   const navigation = useNavigation();
+  const navigate = useNavigate();
   const shopify = useAppBridge();
   const revalidator = useRevalidator();
 
@@ -291,7 +298,7 @@ export default function Index() {
       if (document.visibilityState === "visible" && statsFetcher.state === "idle") {
         statsFetcher.load("/api/stats");
       }
-    }, 3000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [statsFetcher]);
 
@@ -539,6 +546,16 @@ export default function Index() {
             >
               {productList.map(renderProductListRow)}
             </IndexTable>
+            {(pageInfo.hasNextPage || pageInfo.hasPreviousPage) && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>
+                <Pagination
+                  hasPrevious={pageInfo.hasPreviousPage}
+                  onPrevious={() => navigate(`?view=${view}`)}
+                  hasNext={pageInfo.hasNextPage}
+                  onNext={() => navigate(`?view=${view}&cursor=${pageInfo.endCursor}`)}
+                />
+              </div>
+            )}
           </Card>
         </BlockStack>
       </Page>

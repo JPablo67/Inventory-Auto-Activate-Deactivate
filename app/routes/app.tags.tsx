@@ -16,6 +16,7 @@ import {
     Box
 } from "@shopify/polaris";
 import { useState, useCallback, useEffect } from "react";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
@@ -76,7 +77,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     if (actionType === "tag") {
         const productsString = formData.get("products") as string;
         const tag = formData.get("tag") as string;
-        const products = JSON.parse(productsString || "[]");
+        let products;
+        try { products = JSON.parse(productsString || "[]"); } catch { return json({ success: false, error: "Invalid product data" }); }
 
         if (!tag || tag.trim() === "") {
             return json({ success: false, error: "No tag provided" });
@@ -160,6 +162,7 @@ export default function TagsPage() {
     const actionData = useActionData<typeof action>();
     const submit = useSubmit();
     const navigation = useNavigation();
+    const shopify = useAppBridge();
 
     const isLoading = navigation.state === "submitting" || navigation.state === "loading";
     const isScanning = isLoading && navigation.formData?.get("actionType") === "scan";

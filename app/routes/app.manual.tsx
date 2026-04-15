@@ -124,7 +124,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (actionType === "deactivate") {
         const productsString = formData.get("selectedProducts") as string;
-        const products = JSON.parse(productsString || "[]");
+        let products;
+        try { products = JSON.parse(productsString || "[]"); } catch { return json({ success: false, error: "Invalid product data" }); }
 
         // Extract IDs for the service call
         const ids = products.map((p: any) => p.id);
@@ -152,7 +153,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (actionType === "deactivateSingle") {
         const productString = formData.get("product") as string;
-        const product = JSON.parse(productString || "{}");
+        let product;
+        try { product = JSON.parse(productString || "{}"); } catch { return json({ success: false, error: "Invalid product data" }); }
 
         if (product.id) {
             await deactivateProducts(request, [product.id]);
@@ -170,6 +172,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             });
 
             // Remove the product from persistent scan results so it doesn't reappear on reload
+            const currentSettings = await db.settings.findUnique({ where: { shop } });
             if (currentSettings && currentSettings.lastManualScanResults) {
                 try {
                     const parsedResults = JSON.parse(currentSettings.lastManualScanResults);

@@ -59,10 +59,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const variant = responseJson.data?.inventoryItem?.variant;
         const product = variant?.product;
 
+        if (!product) {
+            console.log(`[Webhook] No product found for inventory item ${gid}. Skipping.`);
+            return new Response();
+        }
+
         const hasNewTag = product.tags && product.tags.includes("auto-changed-draft");
         const hasOldTag = product.tags && product.tags.includes("auto-archived-oos");
 
-        if (product && (hasNewTag || hasOldTag)) {
+        if (hasNewTag || hasOldTag) {
             console.log(`[Webhook] MATCH! Reactivating product ${product.title}`);
 
             // Reactivate

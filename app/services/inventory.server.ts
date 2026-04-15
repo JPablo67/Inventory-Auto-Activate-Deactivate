@@ -144,36 +144,26 @@ export async function scanOldProducts(request: Request, minDaysInactive: number 
 export async function deactivateProducts(request: Request, productIds: string[]) {
   const { admin } = await shopify.authenticate.admin(request);
 
-  for (const id of productIds) {
-    // 1. Add tag
-    const tagsQuery = `
-            mutation addTags($id: ID!, $tags: [String!]!) {
-                tagsAdd(id: $id, tags: $tags) {
-                    userErrors {
-                        field
-                        message
-                    }
-                }
-            }
-        `;
-    await admin.graphql(tagsQuery, { variables: { id, tags: [DEACTIVATION_TAG] } });
+  const mutation = `
+    mutation deactivateProduct($id: ID!, $tags: [String!]!) {
+      tagsAdd(id: $id, tags: $tags) { userErrors { field message } }
+      productUpdate(input: {id: $id, status: DRAFT}) { userErrors { field message } }
+    }
+  `;
 
-    // 2. Set status to DRAFT
-    const updateQuery = `
-            mutation productUpdate($input: ProductInput!) {
-                productUpdate(input: $input) {
-                    userErrors {
-                        field
-                        message
-                    }
-                }
-            }
-        `;
-    await admin.graphql(updateQuery, { variables: { input: { id, status: "DRAFT" } } });
+  // Process in parallel batches of 4 to respect Shopify rate limits
+  const BATCH_SIZE = 4;
+  for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
+    const batch = productIds.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      batch.map((id) =>
+        admin.graphql(mutation, { variables: { id, tags: [DEACTIVATION_TAG] } })
+      )
+    );
   }
 }
 
-export async function getProductsByStatus(request: Request, status: string) {
+export async function getProductsByStatus(request: Request, status: string, cursor?: string | null) {
   const { admin } = await shopify.authenticate.admin(request);
 
   let queryString = `status:${status}`;
@@ -184,8 +174,14 @@ export async function getProductsByStatus(request: Request, status: string) {
   }
 
   const query = `
-    query getProducts($query: String!) {
-      products(first: 50, query: $query) {
+    query getProducts($query: String!, $cursor: String) {
+      products(first: 50, query: $query, after: $cursor) {
+        pageInfo {
+          hasNextPage
+          hasPreviousPage
+          endCursor
+          startCursor
+        }
         nodes {
           id
           title
@@ -206,8 +202,12 @@ export async function getProductsByStatus(request: Request, status: string) {
     }
   `;
 
-  const response = await admin.graphql(query, { variables: { query: queryString } });
+  const response = await admin.graphql(query, { variables: { query: queryString, cursor: cursor || null } });
   const responseJson: any = await response.json();
+  const products = responseJson.data?.products;
 
-  return (responseJson as any).data?.products?.nodes || [];
+  return {
+    nodes: products?.nodes || [],
+    pageInfo: products?.pageInfo || { hasNextPage: false, hasPreviousPage: false, endCursor: null, startCursor: null },
+  };
 }

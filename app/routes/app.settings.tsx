@@ -108,7 +108,7 @@ export default function SettingsPage() {
 
     // Polling active status
     useEffect(() => {
-        const intervalMs = isRunning ? 1000 : 5000;
+        const intervalMs = isRunning ? 3000 : 15000;
         const interval = setInterval(() => {
             if (document.visibilityState === 'visible' && statusFetcher.state === 'idle') {
                 statusFetcher.load('/api/status');

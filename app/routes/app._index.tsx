@@ -93,50 +93,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     orderBy: { createdAt: "desc" },
   });
 
-  // Enrich logs with Shopify Product Data (Image, SKU, Current Status)
-  const logProductIds = [...new Set(logs.map((l) => l.productId).filter((id) => id))];
-  const logProductsMap: Record<string, any> = {};
-
-  if (logProductIds.length > 0) {
-    const query = `
-      query getLogProducts($ids: [ID!]!) {
-        nodes(ids: $ids) {
-          ... on Product {
-            id
-            title
-            handle
-            status
-            featuredImage { url }
-            variants(first: 1) { nodes { sku } }
-          }
-        }
-      }
-    `;
-
-    try {
-      const response = await admin.graphql(query, { variables: { ids: logProductIds } });
-      const responseJson = await response.json();
-      const nodes = (responseJson as any).data?.nodes || [];
-
-      nodes.forEach((node: any) => {
-        if (node && node.id) {
-          logProductsMap[node.id] = node;
-        }
-      });
-    } catch (e) {
-      console.error("Failed to fetch details for log products:", e);
-    }
-  }
-
-  const enrichedLogs = logs.map((log) => ({
-    ...log,
-    productDetails: logProductsMap[log.productId] || null,
-  }));
-
   // 3. Fetch Settings
   const settings = await db.settings.findUnique({ where: { shop: session.shop } });
 
-  return { stats, logs: enrichedLogs, productList, pageInfo, view, settings };
+  return { stats, logs, productList, pageInfo, view, settings };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -187,6 +147,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             productId: product.id,
             productTitle: product.title,
             productSku: product.sku,
+            productImageUrl: product.imageUrl || null,
             method: "MANUAL",
             action: "DEACTIVATE",
           }
@@ -356,7 +317,8 @@ export default function Index() {
       .map((item: any) => ({
         id: item.id,
         title: item.title,
-        sku: item.variants?.nodes?.[0]?.sku || ""
+        sku: item.variants?.nodes?.[0]?.sku || "",
+        imageUrl: item.featuredImage?.url || null
       }));
 
     submit({ actionType: "deactivate", selectedProducts: JSON.stringify(selectedProducts) }, { method: "POST" });

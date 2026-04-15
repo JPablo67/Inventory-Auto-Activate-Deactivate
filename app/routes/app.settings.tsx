@@ -407,7 +407,6 @@ export default function SettingsPage() {
                                             selectable={false}
                                         >
                                             {logs.map((log: any, index: number) => {
-                                                const product = log.productDetails;
                                                 const dateStr = new Date(log.createdAt).toLocaleString();
 
                                                 // Action Label
@@ -430,9 +429,9 @@ export default function SettingsPage() {
                                                 }
 
                                                 // Product Details
-                                                const image = product?.featuredImage?.url;
-                                                const sku = log.productSku || product?.variants?.nodes?.[0]?.sku || '-';
-                                                const name = log.productTitle || product?.title || 'Unknown Product';
+                                                const image = log.productImageUrl;
+                                                const sku = log.productSku || '-';
+                                                const name = log.productTitle || 'Unknown Product';
                                                 const id = log.productId;
 
                                                 return (

@@ -134,7 +134,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                                 shop: session.shop,
                                 productId: product.id,
                                 productTitle: product.title,
-                                productSku: product.sku || "-", // We'll pass the exact matched SKU
+                                productSku: product.sku || "-",
+                                productImageUrl: product.imageUrl || null,
                                 method: "MANUAL",
                                 action: `TAG: ${tag}`,
                             }
@@ -213,7 +214,8 @@ export default function TagsPage() {
             return {
                 id: p.id,
                 title: p.title,
-                sku: skuToLog
+                sku: skuToLog,
+                imageUrl: p.featuredImage?.url || null
             };
         });
 

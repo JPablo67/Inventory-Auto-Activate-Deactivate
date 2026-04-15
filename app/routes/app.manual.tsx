@@ -38,59 +38,19 @@ interface Settings {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-    const { session, admin } = await authenticate.admin(request);
+    const { session } = await authenticate.admin(request);
 
     // 1. Fetch Settings
     const settings = await db.settings.findUnique({ where: { shop: session.shop } });
 
-    // 2. Fetch Activity Log
+    // 2. Fetch Activity Log — all display data is stored directly in the table
     const logs = await db.activityLog.findMany({
         where: { shop: session.shop, method: 'MANUAL', action: 'DEACTIVATE' },
         take: 10,
         orderBy: { createdAt: "desc" },
     });
 
-    // Enrich logs with Shopify Product Data (Image, SKU, Current Status)
-    const logProductIds = [...new Set(logs.map((l) => l.productId).filter((id) => id))];
-    const logProductsMap: Record<string, any> = {};
-
-    if (logProductIds.length > 0) {
-        const query = `
-      query getLogProducts($ids: [ID!]!) {
-        nodes(ids: $ids) {
-          ... on Product {
-            id
-            title
-            handle
-            status
-            featuredImage { url }
-            variants(first: 1) { nodes { sku } }
-          }
-        }
-      }
-    `;
-
-        try {
-            const response = await admin.graphql(query, { variables: { ids: logProductIds } });
-            const responseJson = await response.json();
-            const nodes = (responseJson as any).data?.nodes || [];
-
-            nodes.forEach((node: any) => {
-                if (node && node.id) {
-                    logProductsMap[node.id] = node;
-                }
-            });
-        } catch (e) {
-            console.error("Failed to fetch details for log products:", e);
-        }
-    }
-
-    const enrichedLogs = logs.map((log) => ({
-        ...log,
-        productDetails: logProductsMap[log.productId] || null,
-    }));
-
-    return json({ settings, logs: enrichedLogs });
+    return json({ settings, logs });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -141,6 +101,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         productId: product.id,
                         productTitle: product.title,
                         productSku: product.sku,
+                        productImageUrl: product.featuredImage?.url || null,
                         method: "MANUAL",
                         action: "DEACTIVATE",
                     }
@@ -166,6 +127,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     productId: product.id,
                     productTitle: product.title,
                     productSku: product.sku,
+                    productImageUrl: product.featuredImage?.url || null,
                     method: "MANUAL",
                     action: "DEACTIVATE",
                 }
@@ -352,10 +314,7 @@ export default function ManualScanPage() {
         productSku: p.sku,
         productTitle: p.title,
         productId: p.id,
-        productDetails: {
-            featuredImage: p.featuredImage,
-            title: p.title
-        }
+        productImageUrl: p.featuredImage?.url || null
     }));
 
     // Merge logs ensuring no temporary duplicates
@@ -490,7 +449,6 @@ export default function ManualScanPage() {
                                     selectable={false}
                                 >
                                     {combinedLogs.map((log: any, index: number) => {
-                                        const product = log.productDetails;
                                         const dateStr = new Date(log.createdAt).toLocaleString();
 
                                         // Action Label
@@ -520,9 +478,9 @@ export default function ManualScanPage() {
                                                 methodTone = 'attention';
                                             }
                                         }
-                                        const image = product?.featuredImage?.url;
-                                        const sku = log.productSku || product?.variants?.nodes?.[0]?.sku || "-";
-                                        const name = log.productTitle || product?.title || "Unknown Product";
+                                        const image = log.productImageUrl;
+                                        const sku = log.productSku || "-";
+                                        const name = log.productTitle || "Unknown Product";
                                         const id = log.productId;
 
                                         return (

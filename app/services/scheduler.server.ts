@@ -283,6 +283,7 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
                             productId: id,
                             productTitle: product.title,
                             productSku: sku,
+                            productImageUrl: product.featuredImage?.url || null,
                             method: "AUTO",
                             action: "AUTO-DEACTIVATE"
                         }
@@ -354,6 +355,7 @@ async function processReactivationQuery(admin: any, shop: string, searchQuery: s
               id
               title
               tags
+              featuredImage { url }
               variants(first: 1) { nodes { sku } }
             }
           }
@@ -392,6 +394,7 @@ async function processReactivationQuery(admin: any, shop: string, searchQuery: s
                     productId: product.id,
                     productTitle: product.title,
                     productSku: product.variants?.nodes?.[0]?.sku || "",
+                    productImageUrl: product.featuredImage?.url || null,
                     method: "AUTO-SWEEPER",
                     action: "REACTIVATE"
                 }

@@ -38,8 +38,9 @@ model ActivityLog {
   shop         String
   productId    String
   productTitle String
-  productSku   String?
-  method       String?  // "AUTO", "MANUAL", "WEBHOOK"
+  productSku      String?
+  productImageUrl String?
+  method          String?  // "AUTO", "MANUAL", "WEBHOOK"
   action       String
   createdAt    DateTime @default(now())
 

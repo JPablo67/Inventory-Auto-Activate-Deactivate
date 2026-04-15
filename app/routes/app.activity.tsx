@@ -20,7 +20,7 @@ import db from "../db.server";
 const PAGE_SIZE = 50;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-    const { session, admin } = await authenticate.admin(request);
+    const { session } = await authenticate.admin(request);
     const url = new URL(request.url);
     const page = parseInt(url.searchParams.get("page") || "1", 10);
     const filter = url.searchParams.get("filter") || "all";
@@ -39,7 +39,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         where: whereClause
     });
 
-    // Fetch logs
+    // Fetch logs — all display data is stored directly in the table
     const logs = await db.activityLog.findMany({
         where: whereClause,
         orderBy: { createdAt: 'desc' },
@@ -47,48 +47,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         take: PAGE_SIZE
     });
 
-    // Enrich logs with Shopify Product Data (Image, SKU)
-    const logProductIds = [...new Set(logs.map((l) => l.productId).filter((id) => id))];
-    const logProductsMap: Record<string, any> = {};
-
-    if (logProductIds.length > 0) {
-        const query = `
-      query getLogProducts($ids: [ID!]!) {
-        nodes(ids: $ids) {
-          ... on Product {
-            id
-            title
-            handle
-            status
-            featuredImage { url }
-            variants(first: 1) { nodes { sku } }
-          }
-        }
-      }
-    `;
-
-        try {
-            const response = await admin.graphql(query, { variables: { ids: logProductIds } });
-            const responseJson = await response.json();
-            const nodes = (responseJson as any).data?.nodes || [];
-
-            nodes.forEach((node: any) => {
-                if (node && node.id) {
-                    logProductsMap[node.id] = node;
-                }
-            });
-        } catch (e) {
-            console.error("Failed to fetch details for log products:", e);
-        }
-    }
-
-    const enrichedLogs = logs.map((log) => ({
-        ...log,
-        productDetails: logProductsMap[log.productId] || null,
-    }));
-
     return json({
-        logs: enrichedLogs,
+        logs,
         page,
         totalPages: Math.ceil(totalCount / PAGE_SIZE),
         totalCount
@@ -190,7 +150,6 @@ export default function ActivityLogPage() {
                                         selectable={false}
                                     >
                                         {logs.map((log: any, index: number) => {
-                                            const product = log.productDetails;
                                             const dateStr = new Date(log.createdAt).toLocaleString();
 
                                             // Action Label
@@ -225,9 +184,9 @@ export default function ActivityLogPage() {
                                             }
 
                                             // SKU & Name
-                                            const image = product?.featuredImage?.url;
-                                            const sku = log.productSku || product?.variants?.nodes?.[0]?.sku || "-";
-                                            const name = log.productTitle || product?.title || "Unknown Product";
+                                            const image = log.productImageUrl;
+                                            const sku = log.productSku || "-";
+                                            const name = log.productTitle || "Unknown Product";
                                             const id = log.productId;
 
                                             return (

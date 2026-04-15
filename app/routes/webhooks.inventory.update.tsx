@@ -41,6 +41,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         title
                         status
                         tags
+                        featuredImage { url }
                     }
                 }
             }
@@ -95,6 +96,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     productId: product.id,
                     productTitle: product.title,
                     productSku: variant.sku,
+                    productImageUrl: product.featuredImage?.url || null,
                     method: "WEBHOOK",
                     action: "REACTIVATE"
                 }

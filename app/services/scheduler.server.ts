@@ -129,11 +129,6 @@ async function executeScanForShop(shop: string, minDays: number) {
     }
 }
 
-export async function executeDebugScan(shop: string, minDays: number) {
-    return executeScanForShop(shop, minDays);
-}
-
-
 // Logic duplicated/adapted from inventory.server.ts to work with offline client
 async function scanAndDeactivate(client: any, shop: string, minDays: number, logger: Logger = console.log): Promise<any[]> {
     logger(`[Scheduler] Scanning ${shop} with threshold ${minDays} days...`);

@@ -261,7 +261,7 @@ export default function Index() {
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, [statsFetcher]);
+  }, []);
 
   const isSaving = isLoading && navigation.formData?.get("actionType") === "saveSettings";
 

@@ -25,7 +25,7 @@ import db from "../db.server";
 import shopify from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-    const { admin, session } = await shopify.authenticate.admin(request);
+    const { session } = await shopify.authenticate.admin(request);
     const settings = await db.settings.findUnique({ where: { shop: session.shop } });
 
     return json({ settings, logs: [] });
@@ -117,7 +117,7 @@ export default function SettingsPage() {
             }
         }, intervalMs);
         return () => clearInterval(interval);
-    }, [isRunning, statusFetcher]);
+    }, [isRunning]);
 
     useEffect(() => {
         if (!realtimeSettings?.isActive || !realtimeSettings?.lastRunAt) {
@@ -160,7 +160,7 @@ export default function SettingsPage() {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [realtimeSettings]);
+    }, [realtimeSettings?.isActive, realtimeSettings?.lastRunAt, realtimeSettings?.frequency, realtimeSettings?.frequencyUnit]);
 
     const handleToggleAuto = (isChecked: boolean) => {
         const newValue = isChecked ? 'true' : 'false';
@@ -351,7 +351,7 @@ export default function SettingsPage() {
                                                 selectable={false}
                                             >
                                                 {results.slice(0, isAutoScanResultsExpanded ? results.length : 5).map((product: any, index: number) => {
-                                                    const sku = product.sku || product.variants?.nodes?.[0]?.sku || '-';
+                                                    const sku = product.sku || '-';
                                                     return (
                                                         <IndexTable.Row id={product.id || index.toString()} key={product.id || index} position={index}>
                                                             <IndexTable.Cell>

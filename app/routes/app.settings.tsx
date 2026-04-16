@@ -108,7 +108,9 @@ export default function SettingsPage() {
         setAutoEnabled(isActive ? 'true' : 'false');
     }, [isActive]);
 
-    // Polling active status
+    // Polling active status — pauses when tab is hidden
+    const lastVisibleAt = useRef(Date.now());
+
     useEffect(() => {
         const intervalMs = isRunning ? 3000 : 15000;
         const interval = setInterval(() => {
@@ -118,6 +120,23 @@ export default function SettingsPage() {
         }, intervalMs);
         return () => clearInterval(interval);
     }, [isRunning]);
+
+    // When user returns to the tab after being away, reload for fresh session token
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                const away = Date.now() - lastVisibleAt.current;
+                if (away > 10 * 60 * 1000) {
+                    window.location.reload();
+                }
+            } else {
+                lastVisibleAt.current = Date.now();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, []);
 
     useEffect(() => {
         if (!realtimeSettings?.isActive || !realtimeSettings?.lastRunAt) {

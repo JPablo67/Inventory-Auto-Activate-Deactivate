@@ -34,6 +34,8 @@ interface Settings {
     minDaysInactive: number;
     lastScanType?: string;
     lastScanResults?: string;
+    lastManualRunAt?: string | null;
+    lastManualScanResults?: string;
     lastManualScanDays?: number | null;
 }
 

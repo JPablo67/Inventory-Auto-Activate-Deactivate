@@ -253,7 +253,9 @@ export default function Index() {
   const [timeLeft, setTimeLeft] = useState("");
   const [progress, setProgress] = useState(0);
 
-  // Polling for Real-time Stats
+  // Polling for Real-time Stats — pauses when tab is hidden
+  const lastVisibleAt = useRef(Date.now());
+
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === "visible" && statsFetcher.state === "idle") {
@@ -261,6 +263,24 @@ export default function Index() {
       }
     }, 30000);
     return () => clearInterval(interval);
+  }, []);
+
+  // When user returns to the tab after being away, reload to get a fresh session token
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        const away = Date.now() - lastVisibleAt.current;
+        // If tab was hidden for more than 10 minutes, reload for fresh token
+        if (away > 10 * 60 * 1000) {
+          window.location.reload();
+        }
+      } else {
+        lastVisibleAt.current = Date.now();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
   const isSaving = isLoading && navigation.formData?.get("actionType") === "saveSettings";
@@ -527,7 +547,7 @@ export default function Index() {
   // DASHBOARD VIEW
   return (
     <Page fullWidth>
-      <TitleBar title="Inventory Deactivator" />
+      <TitleBar title="Auto Hide Our Of Stock" />
       <BlockStack gap="500">
 
         {/* Metrics Banner */}

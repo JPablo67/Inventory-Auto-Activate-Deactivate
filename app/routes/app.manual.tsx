@@ -213,7 +213,7 @@ export default function ManualScanPage() {
             .map((item: any) => ({
                 id: item.id,
                 title: item.title,
-                sku: item.variants?.nodes?.[0]?.sku || "",
+                sku: item.sku || item.variants?.nodes?.[0]?.sku || "",
                 featuredImage: item.featuredImage
             }));
 

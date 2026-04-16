@@ -317,7 +317,7 @@ export default function Index() {
       .map((item: any) => ({
         id: item.id,
         title: item.title,
-        sku: item.variants?.nodes?.[0]?.sku || "",
+        sku: item.sku || item.variants?.nodes?.[0]?.sku || "",
         imageUrl: item.featuredImage?.url || null
       }));
 

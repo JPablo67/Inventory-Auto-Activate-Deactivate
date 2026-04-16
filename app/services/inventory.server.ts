@@ -134,8 +134,6 @@ export async function scanOldProducts(request: Request, minDaysInactive: number 
     hasNextPage = pageInfo.hasNextPage;
     cursor = pageInfo.endCursor;
 
-    // Safety break to prevent infinite loops in dev
-    if (candidates.length > 5000) hasNextPage = false;
   }
 
   return candidates;

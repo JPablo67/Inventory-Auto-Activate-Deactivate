@@ -20,7 +20,7 @@ import {
     ProgressBar,
     FormLayout
 } from "@shopify/polaris";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import db from "../db.server";
 import shopify from "../shopify.server";
 
@@ -71,7 +71,7 @@ export default function SettingsPage() {
 
     const logs = logsFetcher.data?.logs || initialLogs;
     const latestLogIdFromStatus = statusFetcher.data?.latestLogId;
-    const currentLatestLogId = logs && logs.length > 0 ? logs[0].id : null;
+    const lastSeenLogId = useRef<number | null>(null);
 
     // Load logs on mount OR if status says there's a new log
     useEffect(() => {
@@ -81,12 +81,14 @@ export default function SettingsPage() {
             return;
         }
 
-        // Real-time update check
-        if (latestLogIdFromStatus && latestLogIdFromStatus !== currentLatestLogId && logsFetcher.state === 'idle') {
-            console.log("New activity detected! Refreshing logs...", latestLogIdFromStatus, currentLatestLogId);
+        // Real-time update check — only refetch if the global latest log ID
+        // changed since we last checked (prevents infinite loop when filtered
+        // logs are empty but other log types exist)
+        if (latestLogIdFromStatus && latestLogIdFromStatus !== lastSeenLogId.current && logsFetcher.state === 'idle') {
+            lastSeenLogId.current = latestLogIdFromStatus;
             logsFetcher.load('/api/logs?method=AUTO&action=AUTO-DEACTIVATE');
         }
-    }, [latestLogIdFromStatus, currentLatestLogId, logsFetcher.state]);
+    }, [latestLogIdFromStatus, logsFetcher.state]);
 
     const isLoading = navigation.state === "submitting" || navigation.state === "loading";
 

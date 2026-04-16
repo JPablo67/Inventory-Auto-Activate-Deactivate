@@ -51,7 +51,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                         title
                         status
                         featuredImage { url }
-                        variants(first: 10) { 
+                        variants(first: 100) {
                             nodes { 
                                 sku 
                                 inventoryQuantity

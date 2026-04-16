@@ -148,7 +148,7 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
         nodes {
           id, title, productType,
           featuredImage { url },
-          variants(first: 10) {
+          variants(first: 100) {
             nodes {
               sku,
               inventoryItem {
@@ -262,7 +262,7 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
                 const response = await client.graphql(
                     `mutation deactivateProduct($id: ID!) {
                         tagsAdd(id: $id, tags: ["auto-changed-draft"]) { userErrors { field message } }
-                        productUpdate(input: {id: $id, status: DRAFT}) { userErrors { field message } }
+                        productChangeStatus(productId: $id, status: DRAFT) { userErrors { field message } }
                     }`,
                     { variables: { id } }
                 );
@@ -271,7 +271,7 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
                 const data = responseJson.data;
 
                 const tagErrors = data?.tagsAdd?.userErrors || [];
-                const updateErrors = data?.productUpdate?.userErrors || [];
+                const updateErrors = data?.productChangeStatus?.userErrors || [];
 
                 if (tagErrors.length > 0 || updateErrors.length > 0) {
                     logger(`[Scheduler] Error deactivating ${id}: ${JSON.stringify([...tagErrors, ...updateErrors])}`, true);
@@ -368,7 +368,7 @@ async function processReactivationQuery(admin: any, shop: string, searchQuery: s
     // Mutation defined outside loop
     const updateQuery = `
         mutation reactivate($id: ID!, $tags: [String!]!) {
-            productUpdate(input: {id: $id, status: ACTIVE}) { userErrors { field message } }
+            productChangeStatus(productId: $id, status: ACTIVE) { userErrors { field message } }
             tagsRemove(id: $id, tags: $tags) { userErrors { field message } }
         }
     `;

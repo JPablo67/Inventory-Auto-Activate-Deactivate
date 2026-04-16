@@ -32,7 +32,7 @@ export async function scanOldProducts(request: Request, minDaysInactive: number 
           featuredImage {
             url
           }
-          variants(first: 10) {
+          variants(first: 100) {
             nodes {
               sku
               inventoryItem {
@@ -145,7 +145,7 @@ export async function deactivateProducts(request: Request, productIds: string[])
   const mutation = `
     mutation deactivateProduct($id: ID!, $tags: [String!]!) {
       tagsAdd(id: $id, tags: $tags) { userErrors { field message } }
-      productUpdate(input: {id: $id, status: DRAFT}) { userErrors { field message } }
+      productChangeStatus(productId: $id, status: DRAFT) { userErrors { field message } }
     }
   `;
 

@@ -74,7 +74,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             // Reactivate
             const updateQuery = `
             mutation reactivate($id: ID!, $tags: [String!]!) {
-                productUpdate(input: {id: $id, status: ACTIVE}) {
+                productChangeStatus(productId: $id, status: ACTIVE) {
                     userErrors { field message }
                 }
                 tagsRemove(id: $id, tags: $tags) {

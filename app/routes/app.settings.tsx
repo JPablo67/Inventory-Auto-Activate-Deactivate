@@ -109,8 +109,6 @@ export default function SettingsPage() {
     }, [isActive]);
 
     // Polling active status — pauses when tab is hidden
-    const lastVisibleAt = useRef(Date.now());
-
     useEffect(() => {
         const intervalMs = isRunning ? 3000 : 15000;
         const interval = setInterval(() => {
@@ -121,21 +119,29 @@ export default function SettingsPage() {
         return () => clearInterval(interval);
     }, [isRunning]);
 
-    // When user returns to the tab after being away, reload for fresh session token
+    // Recover from Shopify App Bridge session-token expiry.
     useEffect(() => {
-        const handleVisibility = () => {
-            if (document.visibilityState === 'visible') {
-                const away = Date.now() - lastVisibleAt.current;
-                if (away > 10 * 60 * 1000) {
-                    window.location.reload();
-                }
-            } else {
-                lastVisibleAt.current = Date.now();
-            }
+        const KEY = "app-bridge-reload-at";
+        const handleRejection = (event: PromiseRejectionEvent) => {
+            const reason = event.reason;
+            const message = typeof reason === 'string' ? reason : reason?.message || '';
+            const stack = reason?.stack || '';
+
+            const isAppBridgeFetchFailure =
+                message.includes('Failed to fetch') &&
+                (stack.includes('app-bridge') || stack.includes('cdn.shopify.com'));
+
+            if (!isAppBridgeFetchFailure) return;
+
+            const lastReload = parseInt(sessionStorage.getItem(KEY) || '0', 10);
+            if (Date.now() - lastReload < 30000) return;
+
+            sessionStorage.setItem(KEY, String(Date.now()));
+            window.location.reload();
         };
 
-        document.addEventListener('visibilitychange', handleVisibility);
-        return () => document.removeEventListener('visibilitychange', handleVisibility);
+        window.addEventListener('unhandledrejection', handleRejection);
+        return () => window.removeEventListener('unhandledrejection', handleRejection);
     }, []);
 
     useEffect(() => {

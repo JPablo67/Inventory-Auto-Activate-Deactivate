@@ -116,13 +116,21 @@ export default function SettingsPage() {
     // useAuthenticatedPoll. Recovery on persistent failure is built in.
 
     useEffect(() => {
-        if (!realtimeSettings?.isActive || !realtimeSettings?.lastRunAt) {
+        if (!realtimeSettings?.isActive) {
             setTimeLeft(null);
             setProgress(0);
             return;
         }
 
-        const interval = setInterval(() => {
+        // First scan hasn't completed yet — scheduler ticks every 5 min, so it
+        // will pick this shop up within that window.
+        if (!realtimeSettings?.lastRunAt) {
+            setTimeLeft("Within 5 min");
+            setProgress(0);
+            return;
+        }
+
+        const tick = () => {
             const lastRun = new Date(realtimeSettings.lastRunAt!).getTime();
             const now = Date.now();
             let nextRun = lastRun;
@@ -137,24 +145,26 @@ export default function SettingsPage() {
             const totalDuration = nextRun - lastRun;
 
             if (diff <= 0) {
-                setTimeLeft("Pending...");
+                setTimeLeft("Within 5 min");
                 setProgress(100);
             } else {
                 const p = Math.max(0, Math.min(100, ((totalDuration - diff) / totalDuration) * 100));
                 setProgress(p);
 
-                // Format friendly time
                 const d = Math.floor(diff / (1000 * 60 * 60 * 24));
                 const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const s = Math.floor((diff % (1000 * 60)) / 1000);
 
-                if (d > 0) setTimeLeft(`${d}d ${h} h`);
-                else if (h > 0) setTimeLeft(`${h}h ${m} m`);
-                else setTimeLeft(`${m} m`);
+                if (d > 0) setTimeLeft(`${d}d ${h}h`);
+                else if (h > 0) setTimeLeft(`${h}h ${m}m`);
+                else if (m > 0) setTimeLeft(`${m}m ${s}s`);
+                else setTimeLeft(`${s}s`);
             }
+        };
 
-        }, 1000);
-
+        tick();
+        const interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
     }, [realtimeSettings?.isActive, realtimeSettings?.lastRunAt, realtimeSettings?.frequency, realtimeSettings?.frequencyUnit]);
 
@@ -244,7 +254,7 @@ export default function SettingsPage() {
                                         </InlineStack>
                                         {!isRunning && (
                                             <div style={{ height: '4px', background: 'var(--p-color-bg-surface-tertiary)', borderRadius: '2px', overflow: 'hidden' }}>
-                                                <div style={{ width: `${progress}% `, height: '100%', background: 'var(--p-color-bg-fill-success)', transition: 'width 1s linear' }} />
+                                                <div style={{ width: `${progress}%`, height: '100%', background: 'var(--p-color-bg-fill-success)', transition: 'width 1s linear' }} />
                                             </div>
                                         )}
                                     </BlockStack>

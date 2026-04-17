@@ -51,7 +51,7 @@ function scheduleNextRun() {
             global.__isScanning = false;
             scheduleNextRun();
         }
-    }, 5 * 60 * 1000); // Tick every 5 min — shouldRun() gates actual execution per-shop. UI enforces frequency >= 5 min.
+    }, 15 * 1000); // Poll every 15s. Per-shop cadence is anchored to settings.nextRunAt.
 }
 
 async function runAutoScan() {
@@ -93,6 +93,7 @@ async function runAutoScan() {
                         where: { shop: settings.shop },
                         data: {
                             lastRunAt: now,
+                            nextRunAt: computeNextRunAt(settings.frequency, settings.frequencyUnit, now),
                             lastScanType: 'AUTO',
                             lastScanResults: JSON.stringify(slimResults),
                             currentStatus: "IDLE"
@@ -100,10 +101,14 @@ async function runAutoScan() {
                     });
                 } catch (err) {
                     console.error(`[Scheduler] Error processing ${settings.shop}`, err);
-                    // Ensure IDLE on error
+                    // Advance nextRunAt anyway so a persistently failing shop
+                    // doesn't get hammered on every 60s poll.
                     await db.settings.update({
                         where: { shop: settings.shop },
-                        data: { currentStatus: "IDLE" }
+                        data: {
+                            nextRunAt: computeNextRunAt(settings.frequency, settings.frequencyUnit, now),
+                            currentStatus: "IDLE"
+                        }
                     });
                 }
             } else {
@@ -118,19 +123,19 @@ async function runAutoScan() {
 
 function shouldRun(settings: Settings, now: Date) {
     if (!settings.isActive) return false;
-    // If never run, run now
-    if (!settings.lastRunAt) return true;
+    // Cadence is anchored to nextRunAt, set on toggle ON and after each scan.
+    if (!settings.nextRunAt) return false;
+    return now >= new Date(settings.nextRunAt);
+}
 
-    const lastRun = new Date(settings.lastRunAt);
-    const nextRun = new Date(lastRun);
-
-    if (settings.frequencyUnit === 'minutes') {
-        nextRun.setMinutes(lastRun.getMinutes() + settings.frequency);
-    } else { // days
-        nextRun.setDate(lastRun.getDate() + settings.frequency);
+function computeNextRunAt(frequency: number, frequencyUnit: string, from: Date = new Date()): Date {
+    const next = new Date(from);
+    if (frequencyUnit === "minutes") {
+        next.setTime(next.getTime() + frequency * 60 * 1000);
+    } else {
+        next.setTime(next.getTime() + frequency * 24 * 60 * 60 * 1000);
     }
-
-    return now >= nextRun;
+    return next;
 }
 
 async function executeScanForShop(shop: string, minDays: number) {

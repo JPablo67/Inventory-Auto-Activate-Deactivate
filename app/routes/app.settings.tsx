@@ -24,6 +24,7 @@ import {
 import { useState, useEffect, useRef } from "react";
 import db from "../db.server";
 import shopify from "../shopify.server";
+import { saveAutoSettings } from "../services/settings.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { session } = await shopify.authenticate.admin(request);
@@ -38,22 +39,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const actionType = formData.get("actionType");
 
     if (actionType === "saveSettings") {
-        const isActive = formData.get("isActive") === "true";
-        let frequency = parseInt(formData.get("frequency") as string, 10);
-        const frequencyUnit = formData.get("frequencyUnit") as string;
-        const minDaysInactive = parseInt(formData.get("minDaysInactive") as string || "90", 10);
-
-        // UI restricts to multiples of 5 in [5, 90]. Defense in depth in case
-        // the form is bypassed; also clamps the scheduler-tick floor (5 min).
-        if (isNaN(frequency)) frequency = 5;
-        frequency = Math.min(90, Math.max(5, Math.round(frequency / 5) * 5));
-
-        await db.settings.upsert({
-            where: { shop: session.shop },
-            update: { isActive, frequency, frequencyUnit, minDaysInactive },
-            create: { shop: session.shop, isActive, frequency, frequencyUnit, minDaysInactive }
+        await saveAutoSettings({
+            shop: session.shop,
+            isActive: formData.get("isActive") === "true",
+            frequency: parseInt(formData.get("frequency") as string, 10),
+            frequencyUnit: formData.get("frequencyUnit") as string,
+            minDaysInactive: parseInt(formData.get("minDaysInactive") as string || "90", 10),
         });
-
         return json({ success: true, savedSettings: true });
     }
 
@@ -133,33 +125,27 @@ export default function SettingsPage() {
     // useAuthenticatedPoll. Recovery on persistent failure is built in.
 
     useEffect(() => {
-        if (!realtimeSettings?.isActive) {
+        if (!realtimeSettings?.isActive || !realtimeSettings?.nextRunAt) {
             setTimeLeft(null);
             setProgress(0);
             return;
         }
 
-        // First scan hasn't completed yet — scheduler ticks every 5 min and
-        // will pick this shop up on the next tick.
-        if (!realtimeSettings?.lastRunAt) {
-            setTimeLeft("Within 5 min");
-            setProgress(0);
-            return;
-        }
+        // Anchor for the progress bar: prefer lastRunAt (post-first-scan), else
+        // derive the start of this interval from nextRunAt - one full frequency.
+        const intervalMs = realtimeSettings.frequencyUnit === "days"
+            ? realtimeSettings.frequency * 24 * 60 * 60 * 1000
+            : realtimeSettings.frequency * 60 * 1000;
+
+        const nextRun = new Date(realtimeSettings.nextRunAt).getTime();
+        const intervalStart = realtimeSettings.lastRunAt
+            ? new Date(realtimeSettings.lastRunAt).getTime()
+            : nextRun - intervalMs;
 
         const tick = () => {
-            const lastRun = new Date(realtimeSettings.lastRunAt!).getTime();
             const now = Date.now();
-            let nextRun = lastRun;
-
-            if (realtimeSettings.frequencyUnit === 'days') {
-                nextRun += realtimeSettings.frequency * 24 * 60 * 60 * 1000;
-            } else { // minutes
-                nextRun += realtimeSettings.frequency * 60 * 1000;
-            }
-
             const diff = nextRun - now;
-            const totalDuration = nextRun - lastRun;
+            const totalDuration = nextRun - intervalStart;
 
             if (diff <= 0) {
                 setTimeLeft("Pending...");
@@ -183,7 +169,7 @@ export default function SettingsPage() {
         tick();
         const interval = setInterval(tick, 1000);
         return () => clearInterval(interval);
-    }, [realtimeSettings?.isActive, realtimeSettings?.lastRunAt, realtimeSettings?.frequency, realtimeSettings?.frequencyUnit]);
+    }, [realtimeSettings?.isActive, realtimeSettings?.nextRunAt, realtimeSettings?.lastRunAt, realtimeSettings?.frequency, realtimeSettings?.frequencyUnit]);
 
     const handleToggleAuto = (isChecked: boolean) => {
         const newValue = isChecked ? 'true' : 'false';

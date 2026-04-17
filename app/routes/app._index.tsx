@@ -28,6 +28,7 @@ import { ImageIcon } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { scanOldProducts, deactivateProducts, getProductsByStatus, type ShopifyGraphQLResponse } from "../services/inventory.server";
+import { saveAutoSettings } from "../services/settings.server";
 import db from "../db.server";
 
 // Define Settings Interface
@@ -36,6 +37,7 @@ interface Settings {
   frequency: number;
   frequencyUnit: string;
   lastRunAt: string | null;
+  nextRunAt: string | null;
   minDaysInactive: number;
   lastScanType?: string;
   lastScanResults?: string;
@@ -167,17 +169,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (actionType === "saveSettings") {
-    const isActive = formData.get("isActive") === "true";
-    const frequency = parseInt(formData.get("frequency") as string, 10);
-    const frequencyUnit = formData.get("frequencyUnit") as string;
-    const minDaysInactive = parseInt(formData.get("minDaysInactive") as string || "90", 10);
-
-    await db.settings.upsert({
-      where: { shop: settingsSession.shop },
-      update: { isActive, frequency, frequencyUnit, minDaysInactive },
-      create: { shop: settingsSession.shop, isActive, frequency, frequencyUnit, minDaysInactive }
+    await saveAutoSettings({
+      shop: settingsSession.shop,
+      isActive: formData.get("isActive") === "true",
+      frequency: parseInt(formData.get("frequency") as string, 10),
+      frequencyUnit: formData.get("frequencyUnit") as string,
+      minDaysInactive: parseInt(formData.get("minDaysInactive") as string || "90", 10),
     });
-
     return { success: true, savedSettings: true };
   }
 
@@ -333,17 +331,8 @@ export default function Index() {
   // --- Render Helpers ---
 
   const getNextRunTime = () => {
-    if (!typedSettings?.isActive || !typedSettings?.lastRunAt) return null;
-
-    const lastRun = new Date(typedSettings.lastRunAt).getTime();
-    let freqMs = 0;
-    if (typedSettings.frequencyUnit === 'minutes') {
-      freqMs = typedSettings.frequency * 60 * 1000;
-    } else {
-      freqMs = typedSettings.frequency * 24 * 60 * 60 * 1000;
-    }
-
-    return new Date(lastRun + freqMs);
+    if (!typedSettings?.isActive || !typedSettings?.nextRunAt) return null;
+    return new Date(typedSettings.nextRunAt);
   };
 
   const nextRun = getNextRunTime();
@@ -380,14 +369,18 @@ export default function Index() {
 
       setTimeLeft(label);
 
-      // Calculate progress percentage for visual bar (assuming cycle started at lastRunAt)
-      if (typedSettings?.lastRunAt) {
-        const start = new Date(typedSettings.lastRunAt).getTime();
-        const totalDuration = target - start;
-        const elapsed = now - start;
-        const pct = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
-        setProgress(pct);
-      }
+      // Cycle start = lastRunAt (post-first-scan) or nextRun - one interval (first cycle).
+      if (!typedSettings) return;
+      const intervalMs = typedSettings.frequencyUnit === 'minutes'
+        ? typedSettings.frequency * 60 * 1000
+        : typedSettings.frequency * 24 * 60 * 60 * 1000;
+      const start = typedSettings.lastRunAt
+        ? new Date(typedSettings.lastRunAt).getTime()
+        : target - intervalMs;
+      const totalDuration = target - start;
+      const elapsed = now - start;
+      const pct = Math.min(100, Math.max(0, (elapsed / totalDuration) * 100));
+      setProgress(pct);
 
     }, 1000);
 

@@ -55,6 +55,7 @@ model Settings {
   minDaysInactive Int      @default(90)
   autoReactivate  Boolean  @default(false)
   lastRunAt       DateTime?
+  nextRunAt       DateTime?
   lastScanType    String?  // "AUTO" or "MANUAL"
   lastScanResults String?  // JSON string of products found/actioned (auto)
   lastManualRunAt DateTime?

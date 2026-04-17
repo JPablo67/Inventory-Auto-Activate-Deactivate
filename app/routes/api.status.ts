@@ -18,6 +18,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             currentStatus: true,
             isActive: true,
             lastRunAt: true,
+            nextRunAt: true,
             lastScanType: true,
             lastScanResults: true,
             frequency: true,

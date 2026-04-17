@@ -39,9 +39,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (actionType === "saveSettings") {
         const isActive = formData.get("isActive") === "true";
-        const frequency = parseInt(formData.get("frequency") as string, 10);
+        let frequency = parseInt(formData.get("frequency") as string, 10);
         const frequencyUnit = formData.get("frequencyUnit") as string;
         const minDaysInactive = parseInt(formData.get("minDaysInactive") as string || "90", 10);
+
+        // UI restricts to multiples of 5 in [5, 90]. Defense in depth in case
+        // the form is bypassed; also clamps the scheduler-tick floor (5 min).
+        if (isNaN(frequency)) frequency = 5;
+        frequency = Math.min(90, Math.max(5, Math.round(frequency / 5) * 5));
 
         await db.settings.upsert({
             where: { shop: session.shop },
@@ -96,10 +101,22 @@ export default function SettingsPage() {
 
     const isLoading = navigation.state === "submitting" || navigation.state === "loading";
 
+    // Frequency must be a multiple of 5 in [5, 90] — UI is a fixed dropdown.
+    const FREQUENCY_OPTIONS = Array.from({ length: 18 }, (_, i) => {
+        const v = String((i + 1) * 5);
+        return { label: v, value: v };
+    });
+    const normalizeFrequency = (n: number | undefined) => {
+        if (!n || n < 5) return "5";
+        if (n > 90) return "90";
+        const rounded = Math.round(n / 5) * 5;
+        return String(Math.min(90, Math.max(5, rounded)));
+    };
+
     // User State
     const [autoEnabled, setAutoEnabled] = useState(settings?.isActive ? 'true' : 'false');
     const [autoMinDays, setAutoMinDays] = useState(settings?.minDaysInactive?.toString() || "90");
-    const [frequency, setFrequency] = useState(settings?.frequency?.toString() || "1");
+    const [frequency, setFrequency] = useState(normalizeFrequency(settings?.frequency));
     const [frequencyUnit, setFrequencyUnit] = useState(settings?.frequencyUnit || "days");
     const [isAutoScanResultsExpanded, setIsAutoScanResultsExpanded] = useState(false);
 
@@ -122,10 +139,10 @@ export default function SettingsPage() {
             return;
         }
 
-        // First scan hasn't completed yet — scheduler ticks every 60s and will
-        // pick this shop up on the next tick.
+        // First scan hasn't completed yet — scheduler ticks every 5 min and
+        // will pick this shop up on the next tick.
         if (!realtimeSettings?.lastRunAt) {
-            setTimeLeft("Within 1 min");
+            setTimeLeft("Within 5 min");
             setProgress(0);
             return;
         }
@@ -172,7 +189,6 @@ export default function SettingsPage() {
         const newValue = isChecked ? 'true' : 'false';
         setAutoEnabled(newValue);
 
-        // Immediate save on toggle
         submit({
             actionType: "saveSettings",
             isActive: newValue,
@@ -208,11 +224,8 @@ export default function SettingsPage() {
                                     role="switch"
                                     aria-checked={autoEnabled === 'true'}
                                     onClick={() => handleToggleAuto(autoEnabled !== 'true')}
-                                    // To disable: Comment out onClick above, set cursor: 'not-allowed', and opacity: 0.6
                                     style={{
-                                        //opacity: 0.6,
                                         cursor: 'pointer',
-                                        //cursor: 'not-allowed',
                                         position: 'relative',
                                         width: '48px',
                                         height: '28px',
@@ -277,26 +290,23 @@ export default function SettingsPage() {
                                             disabled={autoEnabled === 'true'}
                                             suffix="days"
                                         />
-                                        <TextField
+                                        <Select
                                             label="Run Scan Every"
-                                            type="number"
+                                            options={FREQUENCY_OPTIONS}
                                             value={frequency}
                                             onChange={setFrequency}
-                                            autoComplete="off"
                                             disabled={autoEnabled === 'true'}
-                                            connectedRight={
-                                                <Select
-                                                    label="Unit"
-                                                    labelHidden
-                                                    options={[
-                                                        { label: 'Days', value: 'days' },
-                                                        { label: 'Minutes', value: 'minutes' },
-                                                    ]}
-                                                    value={frequencyUnit}
-                                                    onChange={setFrequencyUnit}
-                                                    disabled={autoEnabled === 'true'}
-                                                />
-                                            }
+                                            helpText={`Every ${frequency} ${frequencyUnit}`}
+                                        />
+                                        <Select
+                                            label="Unit"
+                                            options={[
+                                                { label: 'Days', value: 'days' },
+                                                { label: 'Minutes', value: 'minutes' },
+                                            ]}
+                                            value={frequencyUnit}
+                                            onChange={setFrequencyUnit}
+                                            disabled={autoEnabled === 'true'}
                                         />
                                     </FormLayout.Group>
                                 </FormLayout>

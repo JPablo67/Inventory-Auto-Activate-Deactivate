@@ -51,7 +51,7 @@ function scheduleNextRun() {
             global.__isScanning = false;
             scheduleNextRun();
         }
-    }, 5 * 60 * 1000); // Check every 5 minutes (shouldRun() gates actual execution)
+    }, 60 * 1000); // Tick every 60s — shouldRun() gates actual execution per-shop
 }
 
 async function runAutoScan() {

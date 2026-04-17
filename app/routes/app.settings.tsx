@@ -122,10 +122,10 @@ export default function SettingsPage() {
             return;
         }
 
-        // First scan hasn't completed yet — scheduler ticks every 5 min, so it
-        // will pick this shop up within that window.
+        // First scan hasn't completed yet — scheduler ticks every 60s and will
+        // pick this shop up on the next tick.
         if (!realtimeSettings?.lastRunAt) {
-            setTimeLeft("Within 5 min");
+            setTimeLeft("Within 1 min");
             setProgress(0);
             return;
         }
@@ -145,7 +145,7 @@ export default function SettingsPage() {
             const totalDuration = nextRun - lastRun;
 
             if (diff <= 0) {
-                setTimeLeft("Within 5 min");
+                setTimeLeft("Pending...");
                 setProgress(100);
             } else {
                 const p = Math.max(0, Math.min(100, ((totalDuration - diff) / totalDuration) * 100));

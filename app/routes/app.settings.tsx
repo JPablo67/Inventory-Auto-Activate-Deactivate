@@ -1,5 +1,6 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useSubmit, useNavigation, useActionData, useRevalidator, useFetcher } from "@remix-run/react";
+import { useLoaderData, useSubmit, useNavigation, useActionData, useRevalidator } from "@remix-run/react";
+import { useAuthenticatedPoll } from "../hooks/useAuthenticatedFetch";
 import {
     Page,
     Layout,
@@ -60,35 +61,38 @@ export default function SettingsPage() {
     const submit = useSubmit();
     const navigation = useNavigation();
     const revalidator = useRevalidator();
-    const statusFetcher = useFetcher<any>();
-    const logsFetcher = useFetcher<any>();
 
-    // Real-time source of truth (Merge initial settings with updates)
-    const realtimeSettings = { ...settings, ...(statusFetcher.data?.settings || {}) };
+    const [isRunning, setIsRunning] = useState(false);
+    const { data: statusData } = useAuthenticatedPoll<{ settings?: any; latestLogId?: number; currentStatus?: string }>({
+        url: '/api/status',
+        intervalMs: isRunning ? 3000 : 15000,
+    });
+
+    const realtimeSettings = { ...settings, ...(statusData?.settings || {}) };
     const currentStatus = realtimeSettings?.currentStatus || "IDLE";
     const isActive = realtimeSettings?.isActive;
-    const isRunning = currentStatus !== 'IDLE';
-
-    const logs = logsFetcher.data?.logs || initialLogs;
-    const latestLogIdFromStatus = statusFetcher.data?.latestLogId;
-    const lastSeenLogId = useRef<number | null>(null);
-
-    // Load logs on mount OR if status says there's a new log
     useEffect(() => {
-        // Initial load
-        if (logsFetcher.state === 'idle' && !logsFetcher.data) {
-            logsFetcher.load('/api/logs?method=AUTO&action=AUTO-DEACTIVATE');
-            return;
-        }
+        setIsRunning(currentStatus !== 'IDLE');
+    }, [currentStatus]);
 
-        // Real-time update check — only refetch if the global latest log ID
-        // changed since we last checked (prevents infinite loop when filtered
-        // logs are empty but other log types exist)
-        if (latestLogIdFromStatus && latestLogIdFromStatus !== lastSeenLogId.current && logsFetcher.state === 'idle') {
+    // Logs: initial load + refetch when latestLogId changes
+    const [logs, setLogs] = useState<any[]>(initialLogs);
+    const [logsLoading, setLogsLoading] = useState(false);
+    const latestLogIdFromStatus = statusData?.latestLogId;
+    const lastSeenLogId = useRef<number | null>(null);
+    const { refetch: refetchLogs } = useAuthenticatedPoll<{ logs: any[] }>({
+        url: '/api/logs?method=AUTO&action=AUTO-DEACTIVATE',
+        intervalMs: 60_000,
+        onData: (d) => setLogs(d.logs),
+    });
+
+    useEffect(() => {
+        if (latestLogIdFromStatus && latestLogIdFromStatus !== lastSeenLogId.current) {
             lastSeenLogId.current = latestLogIdFromStatus;
-            logsFetcher.load('/api/logs?method=AUTO&action=AUTO-DEACTIVATE');
+            setLogsLoading(true);
+            refetchLogs().finally(() => setLogsLoading(false));
         }
-    }, [latestLogIdFromStatus, logsFetcher.state]);
+    }, [latestLogIdFromStatus, refetchLogs]);
 
     const isLoading = navigation.state === "submitting" || navigation.state === "loading";
 
@@ -108,41 +112,8 @@ export default function SettingsPage() {
         setAutoEnabled(isActive ? 'true' : 'false');
     }, [isActive]);
 
-    // Polling active status — pauses when tab is hidden
-    useEffect(() => {
-        const intervalMs = isRunning ? 3000 : 15000;
-        const interval = setInterval(() => {
-            if (document.visibilityState === 'visible' && statusFetcher.state === 'idle') {
-                statusFetcher.load('/api/status');
-            }
-        }, intervalMs);
-        return () => clearInterval(interval);
-    }, [isRunning]);
-
-    // Recover from Shopify App Bridge session-token expiry.
-    useEffect(() => {
-        const KEY = "app-bridge-reload-at";
-        const handleRejection = (event: PromiseRejectionEvent) => {
-            const reason = event.reason;
-            const message = typeof reason === 'string' ? reason : reason?.message || '';
-            const stack = reason?.stack || '';
-
-            const isAppBridgeFetchFailure =
-                message.includes('Failed to fetch') &&
-                (stack.includes('app-bridge') || stack.includes('cdn.shopify.com'));
-
-            if (!isAppBridgeFetchFailure) return;
-
-            const lastReload = parseInt(sessionStorage.getItem(KEY) || '0', 10);
-            if (Date.now() - lastReload < 30000) return;
-
-            sessionStorage.setItem(KEY, String(Date.now()));
-            window.location.reload();
-        };
-
-        window.addEventListener('unhandledrejection', handleRejection);
-        return () => window.removeEventListener('unhandledrejection', handleRejection);
-    }, []);
+    // App Bridge session token + visibility-aware polling are handled inside
+    // useAuthenticatedPoll. Recovery on persistent failure is built in.
 
     useEffect(() => {
         if (!realtimeSettings?.isActive || !realtimeSettings?.lastRunAt) {
@@ -414,7 +385,7 @@ export default function SettingsPage() {
                         <Card>
                             <BlockStack gap="400">
                                 <Text as="h2" variant="headingMd">Recent Activity</Text>
-                                {(!logs || logs.length === 0) && logsFetcher.state === 'loading' ? (
+                                {(!logs || logs.length === 0) && logsLoading ? (
                                     <div style={{ display: "flex", justifyContent: "center", padding: "20px" }}><Spinner /></div>
                                 ) : logs && logs.length > 0 ? (
                                     <>

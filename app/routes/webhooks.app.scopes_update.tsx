@@ -17,5 +17,5 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             },
         });
     }
-    return new Response();
+    return new Response("OK", { status: 200 });
 };

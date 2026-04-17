@@ -9,7 +9,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     if (!admin) {
         console.log("[Webhook] No admin context");
-        return new Response();
+        return new Response("OK", { status: 200 });
     }
 
     // Payload for inventory_levels/update:
@@ -27,7 +27,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
         if (!settings?.autoReactivate) {
             console.log(`[Webhook] Auto-Reactivation is OFF for ${shop}. Skipping.`);
-            return new Response();
+            return new Response("OK", { status: 200 });
         }
 
         // 2. We need to find the product associated with this inventory item.
@@ -62,7 +62,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
         if (!product) {
             console.log(`[Webhook] No product found for inventory item ${gid}. Skipping.`);
-            return new Response();
+            return new Response("OK", { status: 200 });
         }
 
         const hasNewTag = product.tags && product.tags.includes("auto-changed-draft");
@@ -108,5 +108,5 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.log("[Webhook] Stock is 0 or undefined, ignoring.");
     }
 
-    return new Response();
+    return new Response("OK", { status: 200 });
 };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { useActionData, useLoaderData, useSubmit, useNavigation, useNavigate, useSearchParams, Link as RemixLink, useRevalidator, useFetcher } from "@remix-run/react";
+import { useActionData, useLoaderData, useSubmit, useNavigation, useNavigate, useSearchParams, Link as RemixLink, useRevalidator } from "@remix-run/react";
+import { useAuthenticatedPoll } from "../hooks/useAuthenticatedFetch";
 import {
   Page,
   Layout,
@@ -195,8 +196,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function Index() {
   const { stats: initialStats, logs, productList, pageInfo, view, settings } = useLoaderData<typeof loader>();
-  const statsFetcher = useFetcher<any>();
-  const currentStats = statsFetcher.data?.stats || initialStats;
+  const { data: statsData } = useAuthenticatedPoll<{ stats: typeof initialStats }>({
+    url: "/api/stats",
+    intervalMs: 30000,
+    enabled: !view,
+  });
+  const currentStats = statsData?.stats || initialStats;
   const actionData = useActionData<typeof action>();
   const submit = useSubmit();
   const navigation = useNavigation();
@@ -253,43 +258,8 @@ export default function Index() {
   const [timeLeft, setTimeLeft] = useState("");
   const [progress, setProgress] = useState(0);
 
-  // Polling for Real-time Stats — pauses when tab is hidden
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible" && statsFetcher.state === "idle") {
-        statsFetcher.load("/api/stats");
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Recover from Shopify App Bridge session-token expiry.
-  // When the token can't be refreshed, App Bridge throws an unhandled
-  // "Failed to fetch" rejection. Reloading re-establishes the session.
-  useEffect(() => {
-    const KEY = "app-bridge-reload-at";
-    const handleRejection = (event: PromiseRejectionEvent) => {
-      const reason = event.reason;
-      const message = typeof reason === "string" ? reason : reason?.message || "";
-      const stack = reason?.stack || "";
-
-      const isAppBridgeFetchFailure =
-        message.includes("Failed to fetch") &&
-        (stack.includes("app-bridge") || stack.includes("cdn.shopify.com"));
-
-      if (!isAppBridgeFetchFailure) return;
-
-      // Debounce: don't reload more than once per 30s (prevents loops)
-      const lastReload = parseInt(sessionStorage.getItem(KEY) || "0", 10);
-      if (Date.now() - lastReload < 30000) return;
-
-      sessionStorage.setItem(KEY, String(Date.now()));
-      window.location.reload();
-    };
-
-    window.addEventListener("unhandledrejection", handleRejection);
-    return () => window.removeEventListener("unhandledrejection", handleRejection);
-  }, []);
+  // App Bridge session token + visibility-aware polling are handled inside
+  // useAuthenticatedPoll. Recovery on persistent failure is built in.
 
   const isSaving = isLoading && navigation.formData?.get("actionType") === "saveSettings";
 

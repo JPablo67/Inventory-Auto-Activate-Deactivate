@@ -1,6 +1,9 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import shopify from "../shopify.server";
 import db from "../db.server";
+import { getCached, setCached } from "../services/cache.server";
+
+const LOGS_TTL = 5_000; // 5s — logs only change on deactivation/reactivation events
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { session } = await shopify.authenticate.admin(request);
@@ -13,6 +16,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     if (methodFilter) whereClause.method = methodFilter;
     if (actionFilter) whereClause.action = actionFilter;
 
+    const cacheKey = `logs:${session.shop}:${methodFilter ?? ""}:${actionFilter ?? ""}`;
+    const cached = getCached<object>(cacheKey);
+    if (cached) return json(cached);
+
     // Fetch logs — all display data is stored directly in the table
     const logs = await db.activityLog.findMany({
         where: whereClause,
@@ -20,5 +27,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         take: 10
     });
 
-    return json({ logs });
+    const payload = { logs };
+    setCached(cacheKey, payload, LOGS_TTL);
+    return json(payload);
 };

@@ -1,8 +1,15 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
+import { getCached, setCached } from "../services/cache.server";
+
+const STATS_TTL = 25_000; // 25s — just under the 30s client poll interval
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-    const { admin } = await authenticate.admin(request);
+    const { admin, session } = await authenticate.admin(request);
+
+    const cacheKey = `stats:${session.shop}`;
+    const cached = getCached<Record<string, number>>(cacheKey);
+    if (cached) return json({ stats: cached });
 
     const queries = [
         { label: "active", query: "status:active" },
@@ -31,5 +38,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         inactiveWithStock: (results[4] as any).data?.productsCount?.count || 0,
     };
 
+    setCached(cacheKey, stats, STATS_TTL);
     return json({ stats });
 };

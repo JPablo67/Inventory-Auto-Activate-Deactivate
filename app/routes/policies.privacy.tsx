@@ -12,7 +12,7 @@ export default function PrivacyPolicy() {
     return (
         <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, San Francisco, Segoe UI, Roboto, Helvetica Neue, sans-serif", padding: "40px", maxWidth: "800px", margin: "0 auto", lineHeight: "1.6" }}>
             <h1 style={{ fontSize: "2rem", marginBottom: "20px" }}>Privacy Policy</h1>
-            <p style={{ color: "#666" }}>Last updated: {new Date().toLocaleDateString()}</p>
+            <p style={{ color: "#666" }}>Last updated: February 12, 2026</p>
 
             <hr style={{ margin: "30px 0", border: "0", borderTop: "1px solid #eee" }} />
 

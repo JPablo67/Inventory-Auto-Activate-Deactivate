@@ -1,8 +1,13 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 import { getCached, setCached } from "../services/cache.server";
+import type { ShopifyGraphQLResponse } from "../services/inventory.server";
 
 const STATS_TTL = 25_000; // 25s — just under the 30s client poll interval
+
+interface ProductsCountData {
+    productsCount: { count: number };
+}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { admin, session } = await authenticate.admin(request);
@@ -25,17 +30,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             }
           }`,
             { variables: { query: item.query } }
-        ).then(res => res.json())
+        ).then(res => res.json() as Promise<ShopifyGraphQLResponse<ProductsCountData>>)
     );
 
     const results = await Promise.all(queries);
 
     const stats = {
-        active: (results[0] as any).data?.productsCount?.count || 0,
-        draft: (results[1] as any).data?.productsCount?.count || 0,
-        archived: (results[2] as any).data?.productsCount?.count || 0,
-        activeNoStock: (results[3] as any).data?.productsCount?.count || 0,
-        inactiveWithStock: (results[4] as any).data?.productsCount?.count || 0,
+        active: results[0].data?.productsCount?.count || 0,
+        draft: results[1].data?.productsCount?.count || 0,
+        archived: results[2].data?.productsCount?.count || 0,
+        activeNoStock: results[3].data?.productsCount?.count || 0,
+        inactiveWithStock: results[4].data?.productsCount?.count || 0,
     };
 
     setCached(cacheKey, stats, STATS_TTL);

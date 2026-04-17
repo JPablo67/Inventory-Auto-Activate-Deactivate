@@ -12,8 +12,46 @@ export interface ProductCandidate {
   daysInactive: number;
 }
 
+// GraphQL response shape for the getZeroStockProducts query (and the scheduler's
+// variant of it). Only fields actually read by consumers are modeled.
+export interface ZeroStockVariantNode {
+  sku?: string | null;
+  inventoryItem?: {
+    tracked?: boolean | null;
+    inventoryLevels?: {
+      edges?: Array<{
+        node: {
+          updatedAt: string;
+          quantities: Array<{ name?: string; quantity: number }>;
+        };
+      }>;
+    };
+  } | null;
+}
+
+export interface ZeroStockProductNode {
+  id: string;
+  title: string;
+  handle?: string;
+  productType?: string | null;
+  featuredImage: { url: string } | null;
+  variants: { nodes: ZeroStockVariantNode[] };
+  daysInactive?: number;
+}
+
+export interface ShopifyGraphQLResponse<T> {
+  data?: T;
+}
+
+export interface ZeroStockProductsData {
+  products: {
+    pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    nodes: ZeroStockProductNode[];
+  };
+}
+
 export function isDeactivationCandidate(
-  product: any,
+  product: ZeroStockProductNode,
   cutoffMs: number,
 ): { candidate: boolean; daysInactive: number } {
   // EXCLUSION: Gift Cards (covers "Gift Card", "giftcard", "Gift Cards")
@@ -38,7 +76,7 @@ export function isDeactivationCandidate(
     if (!level) continue;
 
     const available =
-      level.quantities.find((q: any) => q.name === "available")?.quantity ?? 0;
+      level.quantities.find((q) => q.name === "available")?.quantity ?? 0;
 
     if (available > 0) {
       allVariantsZero = false;
@@ -114,8 +152,8 @@ export async function scanOldProducts(request: Request, minDaysInactive: number 
   let cursor = null;
 
   while (hasNextPage) {
-    const response: any = await admin.graphql(query, { variables: { cursor } });
-    const responseJson: any = await response.json();
+    const response = await admin.graphql(query, { variables: { cursor } });
+    const responseJson = (await response.json()) as ShopifyGraphQLResponse<ZeroStockProductsData>;
 
     // Safety check for data
     if (!responseJson.data?.products) {
@@ -132,7 +170,7 @@ export async function scanOldProducts(request: Request, minDaysInactive: number 
       candidates.push({
         id: product.id,
         title: product.title,
-        handle: product.handle,
+        handle: product.handle ?? "",
         featuredImage: product.featuredImage,
         sku: product.variants.nodes[0]?.sku || "",
         daysInactive,
@@ -208,8 +246,29 @@ export async function getProductsByStatus(request: Request, status: string, curs
     }
   `;
 
+  interface ProductsByStatusData {
+    products: {
+      pageInfo: {
+        hasNextPage: boolean;
+        hasPreviousPage: boolean;
+        endCursor: string | null;
+        startCursor: string | null;
+      };
+      nodes: Array<{
+        id: string;
+        title: string;
+        handle: string;
+        status: string;
+        totalInventory: number;
+        featuredImage: { url: string } | null;
+        updatedAt: string;
+        variants: { nodes: Array<{ sku?: string | null }> };
+      }>;
+    };
+  }
+
   const response = await admin.graphql(query, { variables: { query: queryString, cursor: cursor || null } });
-  const responseJson: any = await response.json();
+  const responseJson = (await response.json()) as ShopifyGraphQLResponse<ProductsByStatusData>;
   const products = responseJson.data?.products;
 
   return {

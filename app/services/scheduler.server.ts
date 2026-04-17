@@ -1,5 +1,14 @@
+import type { Settings } from "@prisma/client";
+import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import db from "../db.server";
-import { scanOldProducts, deactivateProducts, isDeactivationCandidate } from "./inventory.server";
+import {
+  scanOldProducts,
+  deactivateProducts,
+  isDeactivationCandidate,
+  type ShopifyGraphQLResponse,
+  type ZeroStockProductsData,
+  type ZeroStockProductNode,
+} from "./inventory.server";
 import shopify from "../shopify.server";
 
 declare global {
@@ -75,7 +84,7 @@ async function runAutoScan() {
 
                     // Update lastRunAt, Type, and IDLE
                     // Store only the fields needed for display, not full GraphQL objects
-                    const slimResults = (deactivatedItems || []).map((p: any) => ({
+                    const slimResults = (deactivatedItems || []).map((p) => ({
                         id: p.id,
                         title: p.title,
                         sku: p.variants?.nodes?.[0]?.sku || "",
@@ -107,7 +116,7 @@ async function runAutoScan() {
     }
 }
 
-function shouldRun(settings: any, now: Date) {
+function shouldRun(settings: Settings, now: Date) {
     if (!settings.isActive) return false;
     // If never run, run now
     if (!settings.lastRunAt) return true;
@@ -135,8 +144,7 @@ async function executeScanForShop(shop: string, minDays: number) {
     }
 }
 
-// Logic duplicated/adapted from inventory.server.ts to work with offline client
-async function scanAndDeactivate(client: any, shop: string, minDays: number, logger: Logger = console.log): Promise<any[]> {
+async function scanAndDeactivate(client: AdminApiContext, shop: string, minDays: number, logger: Logger = console.log): Promise<ZeroStockProductNode[]> {
     logger(`[Scheduler] Scanning ${shop} with threshold ${minDays} days...`);
     const cutoffMs = minDays * 24 * 60 * 60 * 1000;
 
@@ -166,16 +174,13 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
 
     let hasNextPage = true;
     let cursor = null;
-    const candidates: any[] = []; // Store full objects to return
+    const candidates: ZeroStockProductNode[] = [];
     let productsChecked = 0;
-
-    // Ensure status is Running Scan (in case called from Debug)
-    // await db.settings.update({ where: { shop }, data: { currentStatus: "Running Scan..." } }); 
 
     while (hasNextPage) {
         try {
-            const response: any = await client.graphql(query, { variables: { cursor } });
-            const responseJson: any = await response.json();
+            const response = await client.graphql(query, { variables: { cursor } });
+            const responseJson = (await response.json()) as ShopifyGraphQLResponse<ZeroStockProductsData>;
 
             const data = responseJson.data;
 
@@ -191,22 +196,23 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
                 const { candidate, daysInactive } = isDeactivationCandidate(product, cutoffMs);
                 if (!candidate) continue;
 
-                (product as any).daysInactive = daysInactive;
+                product.daysInactive = daysInactive;
                 candidates.push(product);
             }
 
             hasNextPage = pageInfo.hasNextPage;
             cursor = pageInfo.endCursor;
 
-        } catch (err: any) {
-            logger(`[Scheduler] Error in scan loop for ${shop}: ${err.message}`, true);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger(`[Scheduler] Error in scan loop for ${shop}: ${message}`, true);
             break;
         }
     }
 
     logger(`[Scheduler] Scan complete for ${shop}. Checked ${productsChecked} products. Found ${candidates.length} to deactivate.`);
 
-    const deactivatedItems: any[] = [];
+    const deactivatedItems: ZeroStockProductNode[] = [];
 
     // 2. Deactivate
     // 2. Deactivate
@@ -239,7 +245,13 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
                     { variables: { id } }
                 );
 
-                const responseJson = await response.json();
+                interface MutationUserError { field?: string[] | null; message: string }
+                interface DeactivateMutationData {
+                    tagsAdd?: { userErrors: MutationUserError[] };
+                    productChangeStatus?: { userErrors: MutationUserError[] };
+                }
+
+                const responseJson = (await response.json()) as ShopifyGraphQLResponse<DeactivateMutationData>;
                 const data = responseJson.data;
 
                 const tagErrors = data?.tagsAdd?.userErrors || [];
@@ -263,8 +275,9 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
                     deactivatedItems.push(product);
                 }
 
-            } catch (err: any) {
-                logger(`[Scheduler] Failed to deactivate ${id}: ${err.message}`, true);
+            } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                logger(`[Scheduler] Failed to deactivate ${id}: ${message}`, true);
             } finally {
                 processed++;
                 // Update status every 10 items or on last item
@@ -318,7 +331,22 @@ async function executeReactivationScan(shop: string) {
     }
 }
 
-async function processReactivationQuery(admin: any, shop: string, searchQuery: string) {
+interface RestockedDraftNode {
+    id: string;
+    title: string;
+    tags: string[];
+    featuredImage: { url: string } | null;
+    variants: { nodes: Array<{ sku?: string | null }> };
+}
+
+interface RestockedDraftsData {
+    products: {
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        nodes: RestockedDraftNode[];
+    };
+}
+
+async function processReactivationQuery(admin: AdminApiContext, shop: string, searchQuery: string) {
     const query = `
         query getRestockedDrafts($cursor: String, $query: String) {
           products(first: 50, query: $query, after: $cursor) {
@@ -346,8 +374,8 @@ async function processReactivationQuery(admin: any, shop: string, searchQuery: s
     `;
 
     while (hasNextPage) {
-        const response: any = await admin.graphql(query, { variables: { cursor, query: searchQuery } });
-        const responseJson: any = await response.json();
+        const response = await admin.graphql(query, { variables: { cursor, query: searchQuery } });
+        const responseJson = (await response.json()) as ShopifyGraphQLResponse<RestockedDraftsData>;
 
         const data = responseJson.data?.products;
         if (!data) break;

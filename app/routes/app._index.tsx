@@ -27,7 +27,7 @@ import {
 import { ImageIcon } from "@shopify/polaris-icons";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { scanOldProducts, deactivateProducts, getProductsByStatus } from "../services/inventory.server";
+import { scanOldProducts, deactivateProducts, getProductsByStatus, type ShopifyGraphQLResponse } from "../services/inventory.server";
 import db from "../db.server";
 
 // Define Settings Interface
@@ -67,17 +67,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             }
           }`,
         { variables: { query: item.query } }
-      ).then(res => res.json())
+      ).then(res => res.json() as Promise<ShopifyGraphQLResponse<{ productsCount: { count: number } }>>)
     );
 
     const results = await Promise.all(queries);
 
     stats = {
-      active: (results[0] as any).data?.productsCount?.count || 0,
-      draft: (results[1] as any).data?.productsCount?.count || 0,
-      archived: (results[2] as any).data?.productsCount?.count || 0,
-      activeNoStock: (results[3] as any).data?.productsCount?.count || 0,
-      inactiveWithStock: (results[4] as any).data?.productsCount?.count || 0,
+      active: results[0].data?.productsCount?.count || 0,
+      draft: results[1].data?.productsCount?.count || 0,
+      archived: results[2].data?.productsCount?.count || 0,
+      activeNoStock: results[3].data?.productsCount?.count || 0,
+      inactiveWithStock: results[4].data?.productsCount?.count || 0,
     };
   } else {
     // If we are in a view, fetch the products with cursor pagination

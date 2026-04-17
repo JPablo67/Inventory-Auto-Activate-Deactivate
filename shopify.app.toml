@@ -24,6 +24,10 @@ api_version = "2026-04"
   topics = [ "inventory_levels/update" ]
   uri = "/webhooks/inventory/update"
 
+  [[webhooks.subscriptions]]
+  topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "/webhooks/privacy"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "write_products,read_inventory"

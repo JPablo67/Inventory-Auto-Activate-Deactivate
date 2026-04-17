@@ -1,5 +1,5 @@
 import db from "../db.server";
-import { scanOldProducts, deactivateProducts } from "./inventory.server";
+import { scanOldProducts, deactivateProducts, isDeactivationCandidate } from "./inventory.server";
 import shopify from "../shopify.server";
 
 declare global {
@@ -188,39 +188,11 @@ async function scanAndDeactivate(client: any, shop: string, minDays: number, log
 
             for (const product of nodes) {
                 productsChecked++;
-                if (product.productType && (product.productType.toLowerCase().includes("gift card") || product.productType === "giftcard")) continue;
+                const { candidate, daysInactive } = isDeactivationCandidate(product, cutoffMs);
+                if (!candidate) continue;
 
-                let mostRecentUpdate = 0;
-                let allVariantsZero = true;
-
-                for (const variant of product.variants.nodes) {
-                    if (variant.inventoryItem?.tracked === false) {
-                        allVariantsZero = false;
-                        break;
-                    }
-
-                    const level = variant.inventoryItem?.inventoryLevels?.edges?.[0]?.node;
-                    if (!level) continue;
-
-                    const quantities = level.quantities || [];
-                    const available = quantities.length > 0 ? quantities[0].quantity : 0;
-
-                    if (available > 0) { allVariantsZero = false; break; }
-
-                    const updatedAt = new Date(level.updatedAt).getTime();
-                    if (updatedAt > mostRecentUpdate) mostRecentUpdate = updatedAt;
-                }
-
-                if (allVariantsZero && mostRecentUpdate > 0) {
-                    const diff = Date.now() - mostRecentUpdate;
-                    const daysInactive = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-                    if (diff > cutoffMs) {
-                        // logger(`[Scheduler] MARKING FOR DEACTIVATION: ${product.title} (ID: ${product.id})`);
-                        (product as any).daysInactive = daysInactive;
-                        candidates.push(product);
-                    }
-                }
+                (product as any).daysInactive = daysInactive;
+                candidates.push(product);
             }
 
             hasNextPage = pageInfo.hasNextPage;

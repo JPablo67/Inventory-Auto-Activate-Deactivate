@@ -13,5 +13,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await db.session.deleteMany({ where: { shop } });
   }
 
+  await db.settings.deleteMany({ where: { shop } });
+  await db.activityLog.deleteMany({ where: { shop } });
+
   return new Response("OK", { status: 200 });
 };

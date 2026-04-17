@@ -12,7 +12,7 @@ export default function PrivacyPolicy() {
     return (
         <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, San Francisco, Segoe UI, Roboto, Helvetica Neue, sans-serif", padding: "40px", maxWidth: "800px", margin: "0 auto", lineHeight: "1.6" }}>
             <h1 style={{ fontSize: "2rem", marginBottom: "20px" }}>Privacy Policy</h1>
-            <p style={{ color: "#666" }}>Last updated: February 12, 2026</p>
+            <p style={{ color: "#666" }}>Last updated: April 17, 2026</p>
 
             <hr style={{ margin: "30px 0", border: "0", borderTop: "1px solid #eee" }} />
 
@@ -45,7 +45,7 @@ export default function PrivacyPolicy() {
 
             <section style={{ marginBottom: "30px" }}>
                 <h2 style={{ fontSize: "1.5rem", marginBottom: "15px" }}>4. Data Retention</h2>
-                <p>We retain your shop's settings (e.g., auto-hide preferences) for as long as the App is installed. If you uninstall the App, your configuration data is deleted from our database within 48 hours.</p>
+                <p>We retain your shop's settings (e.g., auto-hide preferences) and activity logs (a record of products the App has hidden or reactivated) for as long as the App is installed. If you uninstall the App, all data associated with your shop — including settings, activity logs, and session credentials — is deleted from our database within 48 hours. In practice, deletion occurs immediately upon receipt of Shopify's uninstall webhook.</p>
             </section>
 
             <section style={{ marginBottom: "30px" }}>

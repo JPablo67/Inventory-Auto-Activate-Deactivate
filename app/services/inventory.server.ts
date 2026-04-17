@@ -12,6 +12,60 @@ export interface ProductCandidate {
   daysInactive: number;
 }
 
+export function isDeactivationCandidate(
+  product: any,
+  cutoffMs: number,
+): { candidate: boolean; daysInactive: number } {
+  // EXCLUSION: Gift Cards (covers "Gift Card", "giftcard", "Gift Cards")
+  if (product.productType) {
+    const type = product.productType.toLowerCase();
+    if (type.includes("gift card") || type === "giftcard") {
+      return { candidate: false, daysInactive: 0 };
+    }
+  }
+
+  let mostRecentUpdate = 0;
+  let allVariantsZero = true;
+
+  for (const variant of product.variants.nodes) {
+    // EXCLUSION: untracked inventory is always considered active
+    if (variant.inventoryItem?.tracked === false) {
+      allVariantsZero = false;
+      break;
+    }
+
+    const level = variant.inventoryItem?.inventoryLevels?.edges?.[0]?.node;
+    if (!level) continue;
+
+    const available =
+      level.quantities.find((q: any) => q.name === "available")?.quantity ?? 0;
+
+    if (available > 0) {
+      allVariantsZero = false;
+      break;
+    }
+
+    const updatedAt = new Date(level.updatedAt).getTime();
+    if (updatedAt > mostRecentUpdate) {
+      mostRecentUpdate = updatedAt;
+    }
+  }
+
+  if (!allVariantsZero || mostRecentUpdate === 0) {
+    return { candidate: false, daysInactive: 0 };
+  }
+
+  const diff = Date.now() - mostRecentUpdate;
+  if (diff <= cutoffMs) {
+    return { candidate: false, daysInactive: 0 };
+  }
+
+  return {
+    candidate: true,
+    daysInactive: Math.floor(diff / (1000 * 60 * 60 * 24)),
+  };
+}
+
 export async function scanOldProducts(request: Request, minDaysInactive: number = 90): Promise<ProductCandidate[]> {
   const { admin } = await shopify.authenticate.admin(request);
   const cutoffMs = minDaysInactive * 24 * 60 * 60 * 1000;
@@ -72,63 +126,17 @@ export async function scanOldProducts(request: Request, minDaysInactive: number 
     const { nodes, pageInfo } = responseJson.data.products;
 
     for (const product of nodes) {
-      // console.log(`[Scanner] Checking ${product.title} (Type: ${product.productType})`);
+      const { candidate, daysInactive } = isDeactivationCandidate(product, cutoffMs);
+      if (!candidate) continue;
 
-      // EXCLUSION: Skip Gift Cards
-      // Covers: "Gift Card", "giftcard", "Gift Cards"
-      if (product.productType) {
-        const type = product.productType.toLowerCase();
-        if (type.includes("gift card") || type === "giftcard") {
-          // console.log(`[Scanner] Skipping Gift Card: ${product.title}`);
-          continue;
-        }
-      }
-
-      // Check if ALL variants are "old" logic
-
-      let mostRecentUpdate = 0;
-      let allVariantsZero = true;
-
-      for (const variant of product.variants.nodes) {
-        // EXCLUSION: Inventory Not Tracked
-        // If tracked is false, we assume it is always available/active (not subject to deactivation)
-        if (variant.inventoryItem?.tracked === false) {
-          allVariantsZero = false;
-          break;
-        }
-
-        const level = variant.inventoryItem?.inventoryLevels?.edges?.[0]?.node;
-        if (!level) continue;
-
-        const available = level.quantities.find((q: any) => q.name === "available")?.quantity || 0;
-
-        // Double check it's actually 0 
-        if (available > 0) {
-          allVariantsZero = false;
-          break;
-        }
-
-        const updatedAt = new Date(level.updatedAt).getTime();
-        if (updatedAt > mostRecentUpdate) {
-          mostRecentUpdate = updatedAt;
-        }
-      }
-
-      if (allVariantsZero && mostRecentUpdate > 0) {
-        const now = Date.now();
-        const diff = now - mostRecentUpdate;
-
-        if (diff > cutoffMs) {
-          candidates.push({
-            id: product.id,
-            title: product.title,
-            handle: product.handle,
-            featuredImage: product.featuredImage,
-            sku: product.variants.nodes[0]?.sku || "",
-            daysInactive: Math.floor(diff / (1000 * 60 * 60 * 24))
-          });
-        }
-      }
+      candidates.push({
+        id: product.id,
+        title: product.title,
+        handle: product.handle,
+        featuredImage: product.featuredImage,
+        sku: product.variants.nodes[0]?.sku || "",
+        daysInactive,
+      });
     }
 
     hasNextPage = pageInfo.hasNextPage;

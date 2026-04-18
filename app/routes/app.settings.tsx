@@ -28,9 +28,16 @@ import { saveAutoSettings } from "../services/settings.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { session } = await shopify.authenticate.admin(request);
-    const settings = await db.settings.findUnique({ where: { shop: session.shop } });
+    const [settings, logs] = await Promise.all([
+        db.settings.findUnique({ where: { shop: session.shop } }),
+        db.activityLog.findMany({
+            where: { shop: session.shop, method: "AUTO", action: "AUTO-DEACTIVATE" },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+        }),
+    ]);
 
-    return json({ settings, logs: [] });
+    return json({ settings, logs });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -53,7 +60,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function SettingsPage() {
-    const { settings, logs: initialLogs } = useLoaderData<typeof loader>();
+    const { settings, logs } = useLoaderData<typeof loader>();
     const actionData = useActionData<typeof action>();
     const submit = useSubmit();
     const navigation = useNavigation();
@@ -72,24 +79,16 @@ export default function SettingsPage() {
         setIsRunning(currentStatus !== 'IDLE');
     }, [currentStatus]);
 
-    // Logs: initial load + refetch when latestLogId changes
-    const [logs, setLogs] = useState<any[]>(initialLogs);
-    const [logsLoading, setLogsLoading] = useState(false);
+    // Logs come from the loader and stay authoritative. When the status poll
+    // reveals a newer log id (scheduler created a log), revalidate the loader.
     const latestLogIdFromStatus = statusData?.latestLogId;
     const lastSeenLogId = useRef<number | null>(null);
-    const { refetch: refetchLogs } = useAuthenticatedPoll<{ logs: any[] }>({
-        url: '/api/logs?method=AUTO&action=AUTO-DEACTIVATE',
-        intervalMs: 60_000,
-        onData: (d) => setLogs(d.logs),
-    });
-
     useEffect(() => {
         if (latestLogIdFromStatus && latestLogIdFromStatus !== lastSeenLogId.current) {
             lastSeenLogId.current = latestLogIdFromStatus;
-            setLogsLoading(true);
-            refetchLogs().finally(() => setLogsLoading(false));
+            revalidator.revalidate();
         }
-    }, [latestLogIdFromStatus, refetchLogs]);
+    }, [latestLogIdFromStatus, revalidator]);
 
     const isLoading = navigation.state === "submitting" || navigation.state === "loading";
 
@@ -391,9 +390,7 @@ export default function SettingsPage() {
                         <Card>
                             <BlockStack gap="400">
                                 <Text as="h2" variant="headingMd">Recent Activity</Text>
-                                {(!logs || logs.length === 0) && logsLoading ? (
-                                    <div style={{ display: "flex", justifyContent: "center", padding: "20px" }}><Spinner /></div>
-                                ) : logs && logs.length > 0 ? (
+                                {logs && logs.length > 0 ? (
                                     <>
                                         <IndexTable
                                             resourceName={{ singular: 'log', plural: 'logs' }}

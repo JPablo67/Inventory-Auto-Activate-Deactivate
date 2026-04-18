@@ -321,8 +321,6 @@ export default function Index() {
   };
 
   const handleClearLogs = () => {
-    // Ideally add confirmation modal, but for now direct action as per request style (can add modal later if needed)
-    // Actually, let's use a standard window.confirm for safety
     if (confirm("Are you sure you want to clear the activity history?")) {
       submit({ actionType: "clearLogs" }, { method: "POST" });
     }

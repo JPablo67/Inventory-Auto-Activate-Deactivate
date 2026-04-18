@@ -1,3 +1,34 @@
+# Build artifacts and dependencies (rebuilt inside the image)
 .cache
 build
 node_modules
+
+# VCS / CI metadata
+.git
+.gitignore
+.github
+
+# Editor / OS junk
+.vscode
+.editorconfig
+.DS_Store
+
+# Lint / format configs (not needed at runtime)
+.eslintrc.cjs
+.eslintignore
+.prettierignore
+
+# Secrets — must come from container env, never baked into the image
+.env
+.env.*
+
+# Shopify CLI local state
+.shopify
+
+# Docs and changelogs
+*.md
+
+# Local docker / dev tooling
+docker-compose.yml
+Dockerfile
+debug-scan.ts

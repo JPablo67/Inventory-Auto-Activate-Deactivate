@@ -300,7 +300,6 @@ export default function SettingsPage() {
                     </Card>
 
                     {/* Last Auto-Scan Results */}
-                    {/* Last Auto-Scan Results */}
                     <Box paddingBlockStart="400">
                         <Card>
                             <BlockStack gap="400">

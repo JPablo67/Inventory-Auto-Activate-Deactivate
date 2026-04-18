@@ -111,9 +111,6 @@ async function runAutoScan() {
                         }
                     });
                 }
-            } else {
-                // Log why skipped? Too verbose? Maybe only if needed.
-                // console.log(`[Scheduler] Skipping ${settings.shop} - Not due yet.`);
             }
         }
     } catch (error) {
@@ -219,7 +216,6 @@ async function scanAndDeactivate(client: AdminApiContext, shop: string, minDays:
 
     const deactivatedItems: ZeroStockProductNode[] = [];
 
-    // 2. Deactivate
     // 2. Deactivate
     if (candidates.length > 0) {
         const total = candidates.length;

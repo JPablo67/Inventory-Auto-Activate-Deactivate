@@ -8,6 +8,7 @@ import {
   type ZeroStockProductNode,
 } from "./inventory-logic";
 import { shouldRun, computeNextRunAt } from "./scheduler-logic";
+import { isSchedulerAllowed } from "./billing.server";
 import shopify from "../shopify.server";
 
 function captureShopError(error: unknown, phase: string, shop?: string, extra?: Record<string, unknown>) {
@@ -78,6 +79,10 @@ async function runAutoScan() {
         }
 
         for (const settings of settingsList) {
+            if (!isSchedulerAllowed(settings.shop, settings.subscriptionStatus, settings.gracePeriodEndsAt, now)) {
+                console.log(`[Scheduler] Skip ${settings.shop} - no active subscription (status=${settings.subscriptionStatus}).`);
+                continue;
+            }
             if (shouldRun(settings, now)) {
                 console.log(`[Scheduler] Running auto-scan for ${settings.shop}`);
 
@@ -303,7 +308,12 @@ async function runReactivationHelper() {
 
         if (settingsList.length === 0) return;
 
+        const now = new Date();
         for (const settings of settingsList) {
+            if (!isSchedulerAllowed(settings.shop, settings.subscriptionStatus, settings.gracePeriodEndsAt, now)) {
+                console.log(`[Scheduler] Sweeper skip ${settings.shop} - no active subscription (status=${settings.subscriptionStatus}).`);
+                continue;
+            }
             await executeReactivationScan(settings.shop);
         }
 

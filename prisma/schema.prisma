@@ -62,6 +62,8 @@ model Settings {
   lastManualScanResults String? // JSON string of products found/actioned (manual)
   lastManualScanDays Int?  // Remember last manual scan days threshold
   currentStatus   String   @default("IDLE") // "IDLE", "SCANNING", "DEACTIVATING"
+  gracePeriodEndsAt DateTime? // Set when billing lapses; cleared on resubscribe. Past this = hard gate.
+  subscriptionStatus String @default("NONE") // "ACTIVE" | "GRACE" | "NONE". Authoritative for scheduler gating; webhook + loader keep it current.
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

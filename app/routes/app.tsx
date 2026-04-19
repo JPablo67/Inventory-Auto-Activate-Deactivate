@@ -1,22 +1,41 @@
-import type { HeadersFunction, LoaderFunctionArgs } from "@remix-run/node";
+import { redirect, type HeadersFunction, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
+import { Banner } from "@shopify/polaris";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
+import { URL as NodeURL } from "url";
 
 import { authenticate } from "../shopify.server";
+import { evaluateBilling } from "../services/billing.server";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session, billing } = await authenticate.admin(request);
+  const url = new NodeURL(request.url);
 
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  // Don't gate the pricing page itself, otherwise users can't pay to unlock.
+  const isPricingRoute = url.pathname.startsWith("/app/pricing");
+
+  let gracePeriodEndsAt: string | null = null;
+
+  if (!isPricingRoute) {
+    const gate = await evaluateBilling(billing, session.shop);
+    if (!gate.allowed) {
+      throw redirect("/app/pricing");
+    }
+    if (gate.reason === "grace" && gate.gracePeriodEndsAt) {
+      gracePeriodEndsAt = gate.gracePeriodEndsAt.toISOString();
+    }
+  }
+
+  return { apiKey: process.env.SHOPIFY_API_KEY || "", gracePeriodEndsAt };
 };
 
 export default function App() {
-  const { apiKey } = useLoaderData<typeof loader>();
+  const { apiKey, gracePeriodEndsAt } = useLoaderData<typeof loader>();
 
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
@@ -29,7 +48,20 @@ export default function App() {
         <Link to="/app/settings">Auto-Deactivate</Link>
         <Link to="/app/manual">Manual Scan</Link>
         <Link to="/app/tags">Bulk Tags</Link>
+        <Link to="/app/pricing">Plan & Billing</Link>
       </NavMenu>
+      {gracePeriodEndsAt && (
+        <Banner
+          tone="warning"
+          title="Subscription needs attention"
+          action={{ content: "Choose a plan", url: "/app/pricing" }}
+        >
+          <p>
+            Your subscription has lapsed. Access will be suspended on{" "}
+            {new Date(gracePeriodEndsAt).toLocaleString()}.
+          </p>
+        </Banner>
+      )}
       <Outlet />
     </AppProvider>
   );

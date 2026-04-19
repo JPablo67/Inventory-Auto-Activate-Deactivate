@@ -24,6 +24,7 @@ import { ImageIcon } from "@shopify/polaris-icons";
 import { authenticate } from "../shopify.server";
 import { scanOldProducts, deactivateProducts } from "../services/inventory.server";
 import db from "../db.server";
+import { ActivityLogTable } from "../components/ActivityLogTable";
 
 // Define Settings Interface
 interface Settings {
@@ -435,95 +436,12 @@ export default function ManualScanPage() {
                             <Text as="p" tone="subdued">No activity yet.</Text>
                         ) : (
                             <>
-                                <IndexTable
-                                    resourceName={{ singular: 'log', plural: 'logs' }}
-                                    itemCount={combinedLogs.length}
-                                    selectedItemsCount={0}
-                                    onSelectionChange={() => { }}
-                                    headings={[
-                                        { title: 'Date & Time' },
-                                        { title: 'Action' },
-                                        { title: 'Method' },
-                                        { title: 'SKU' },
-                                        { title: 'Name' },
-                                        { title: 'ID' },
-                                    ]}
-                                    selectable={false}
-                                >
-                                    {combinedLogs.map((log: any, index: number) => {
-                                        const dateStr = new Date(log.createdAt).toLocaleString();
-
-                                        // Action Label
-                                        let actionLabel = log.action;
-                                        let badgeTone: "success" | "critical" | "info" | "attention" | "magic" = "info";
-                                        if (log.action === 'AUTO-DEACTIVATE') { actionLabel = 'Drafted'; badgeTone = 'info'; }
-                                        else if (log.action === 'DEACTIVATE') { actionLabel = 'Drafted'; badgeTone = 'info'; }
-                                        else if (log.action === 'REACTIVATE') { actionLabel = 'Reactivated'; badgeTone = 'success'; }
-
-                                        // Method Label
-                                        let methodLabel = log.method;
-                                        let methodTone: "success" | "critical" | "info" | "attention" | "magic" = "subdued" as any;
-
-                                        if (methodLabel === 'WEBHOOK' || methodLabel === 'AUTO') {
-                                            methodLabel = 'Auto';
-                                            methodTone = 'magic';
-                                        } else if (methodLabel === 'MANUAL') {
-                                            methodLabel = 'Manual';
-                                            methodTone = 'attention';
-                                        }
-                                        if (!methodLabel) {
-                                            if (log.action === 'AUTO-DEACTIVATE' || log.action === 'REACTIVATE') {
-                                                methodLabel = 'Auto';
-                                                methodTone = 'magic';
-                                            } else {
-                                                methodLabel = 'Manual';
-                                                methodTone = 'attention';
-                                            }
-                                        }
-                                        const image = log.productImageUrl;
-                                        const sku = log.productSku || "-";
-                                        const name = log.productTitle || "Unknown Product";
-                                        const id = log.productId;
-
-                                        return (
-                                            <IndexTable.Row id={log.id.toString()} key={log.id} position={index}>
-                                                <IndexTable.Cell>
-                                                    {dateStr === "Invalid Date" ? "Just Now" : dateStr}
-                                                </IndexTable.Cell>
-                                                <IndexTable.Cell>
-                                                    <Badge tone={badgeTone}>{actionLabel}</Badge>
-                                                </IndexTable.Cell>
-                                                <IndexTable.Cell>
-                                                    <Badge tone={methodTone}>{methodLabel}</Badge>
-                                                </IndexTable.Cell>
-                                                <IndexTable.Cell>
-                                                    <Text variant="bodySm" as="span" fontWeight="bold">{sku}</Text>
-                                                </IndexTable.Cell>
-                                                <IndexTable.Cell>
-                                                    <InlineStack gap="300" blockAlign="start" wrap={false}>
-                                                        <div>
-                                                            {image ? (
-                                                                <Thumbnail
-                                                                    source={image}
-                                                                    alt={name}
-                                                                    size="small"
-                                                                />
-                                                            ) : (
-                                                                <div style={{ width: 40, height: 40, background: "#f1f1f1", borderRadius: 4 }}></div>
-                                                            )}
-                                                        </div>
-                                                        <div style={{ flex: 1, minWidth: 0, wordBreak: "break-word", whiteSpace: "normal" }}>
-                                                            <Text variant="bodyMd" as="span">{name}</Text>
-                                                        </div>
-                                                    </InlineStack>
-                                                </IndexTable.Cell>
-                                                <IndexTable.Cell>
-                                                    <Text variant="bodySm" as="span" tone="subdued">{id.split("/").pop()}</Text>
-                                                </IndexTable.Cell>
-                                            </IndexTable.Row>
-                                        );
-                                    })}
-                                </IndexTable>
+                                <ActivityLogTable
+                                    logs={combinedLogs}
+                                    deactivatedLabel="Drafted"
+                                    applyMethodFallback
+                                    handleInvalidDate
+                                />
                                 {logs && logs.length >= 10 && (
                                     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', paddingBottom: '1rem' }}>
                                         <Button url="/app/activity" variant="plain">

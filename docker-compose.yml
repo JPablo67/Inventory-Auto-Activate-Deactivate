@@ -25,6 +25,8 @@ services:
     ports:
       - "4500:3000"
     env_file: .env
+    environment:
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-unknown}
     depends_on:
       db:
         condition: service_healthy

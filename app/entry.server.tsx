@@ -6,8 +6,22 @@ import {
   type EntryContext,
 } from "@remix-run/node";
 import { isbot } from "isbot";
+import * as Sentry from "@sentry/remix";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import { initScheduler } from "./services/scheduler.server";
+
+// Init Sentry before anything else so the scheduler + request handlers are covered.
+// Skipped in dev (no DSN set) so local runs don't ship noise to production project.
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV,
+    release: process.env.SENTRY_RELEASE,
+    tracesSampleRate: 0,
+  });
+}
+
+export const handleError = Sentry.sentryHandleError;
 
 initScheduler();
 

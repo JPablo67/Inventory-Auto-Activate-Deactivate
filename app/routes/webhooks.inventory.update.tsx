@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
+import * as Sentry from "@sentry/remix";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
@@ -6,6 +7,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const { topic, shop, session, admin, payload } = await authenticate.webhook(request);
 
     console.log(`[Webhook] Received ${topic} for shop ${shop}`);
+
+    Sentry.getCurrentScope().setTag("shop", shop);
+    Sentry.getCurrentScope().setTag("webhook_topic", topic);
 
     if (!admin) {
         console.log("[Webhook] No admin context");

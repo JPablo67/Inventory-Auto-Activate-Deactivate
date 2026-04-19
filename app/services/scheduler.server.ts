@@ -1,4 +1,5 @@
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
+import * as Sentry from "@sentry/remix";
 import db from "../db.server";
 import {
   isDeactivationCandidate,
@@ -8,6 +9,14 @@ import {
 } from "./inventory-logic";
 import { shouldRun, computeNextRunAt } from "./scheduler-logic";
 import shopify from "../shopify.server";
+
+function captureShopError(error: unknown, phase: string, shop?: string, extra?: Record<string, unknown>) {
+    Sentry.withScope((scope) => {
+        if (shop) scope.setTag("shop", shop);
+        scope.setContext("scheduler", { phase, ...extra });
+        Sentry.captureException(error);
+    });
+}
 
 declare global {
     var __schedulerInterval: NodeJS.Timeout | undefined;
@@ -45,6 +54,7 @@ function scheduleNextRun() {
             await runReactivationHelper();
         } catch (error) {
             console.error("[Scheduler] Error in scan loop:", error);
+            captureShopError(error, "tick");
         } finally {
             global.__isScanning = false;
             scheduleNextRun();
@@ -99,6 +109,7 @@ async function runAutoScan() {
                     });
                 } catch (err) {
                     console.error(`[Scheduler] Error processing ${settings.shop}`, err);
+                    captureShopError(err, "auto-scan-shop", settings.shop);
                     // Advance nextRunAt anyway so a persistently failing shop
                     // doesn't get hammered on every 60s poll.
                     await db.settings.update({
@@ -113,6 +124,7 @@ async function runAutoScan() {
         }
     } catch (error) {
         console.error("[Scheduler] Error in runAutoScan:", error);
+        captureShopError(error, "auto-scan-outer");
     }
 }
 
@@ -123,6 +135,7 @@ async function executeScanForShop(shop: string, minDays: number) {
         return await scanAndDeactivate(admin, shop, minDays);
     } catch (error) {
         console.error(`[Scheduler] Failed to authenticate scanner for ${shop}:`, error);
+        captureShopError(error, "scan-auth", shop);
         throw error;
     }
 }
@@ -189,6 +202,7 @@ async function scanAndDeactivate(client: AdminApiContext, shop: string, minDays:
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             logger(`[Scheduler] Error in scan loop for ${shop}: ${message}`, true);
+            captureShopError(err, "scan-page", shop, { cursor });
             break;
         }
     }
@@ -260,6 +274,7 @@ async function scanAndDeactivate(client: AdminApiContext, shop: string, minDays:
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
                 logger(`[Scheduler] Failed to deactivate ${id}: ${message}`, true);
+                captureShopError(err, "deactivate-product", shop, { productId: id });
             } finally {
                 processed++;
                 // Update status every 10 items or on last item
@@ -294,6 +309,7 @@ async function runReactivationHelper() {
 
     } catch (error) {
         console.error("[Scheduler] Error in Reactivation Sweeper:", error);
+        captureShopError(error, "reactivation-outer");
     }
 }
 
@@ -310,6 +326,7 @@ async function executeReactivationScan(shop: string) {
 
     } catch (error) {
         console.error(`[Scheduler] Failed Reactivation Scan for ${shop}:`, error);
+        captureShopError(error, "reactivation-shop", shop);
     }
 }
 

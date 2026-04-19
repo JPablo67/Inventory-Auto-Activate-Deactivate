@@ -73,9 +73,11 @@ jobs:
           fi
 
       - name: Build and deploy
+        env:
+          SENTRY_RELEASE: ${{ github.sha }}
         run: |
           cd "$PROJECT_DIR"
-          sudo docker compose up -d --build
+          sudo -E docker compose up -d --build
 
       - name: Health check
         id: healthcheck

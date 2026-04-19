@@ -3,22 +3,115 @@ on:
   push:
     branches:
       - main
+
+# Prevent two deploys running at once. If a newer commit lands while a deploy
+# is in flight, the new one queues behind it — cancelling mid-rebuild could
+# leave the container in a half-swapped state.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
-  deploy:
+  validate:
     runs-on: self-hosted
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: inventory-deactivator
     steps:
-      - name: Deploy
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: inventory-deactivator/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+  deploy:
+    needs: validate
+    runs-on: self-hosted
+    timeout-minutes: 15
+    env:
+      PROJECT_DIR: /home/jpablo67/Documents/Work/Inventory-Auto-Activate-Deactivate
+      APP_CONTAINER: inventory-deactivator
+      APP_IMAGE: inventory-auto-activate-deactivate-app:latest
+      ROLLBACK_IMAGE: inventory-auto-activate-deactivate-app:rollback
+      COMPOSE_NETWORK: inventory-auto-activate-deactivate_default
+      HEALTH_URL: http://inventory-deactivator:3000/health
+      HEALTH_TIMEOUT_SECONDS: '120'
+    steps:
+      - name: Pull latest code
         run: |
-          # Navigate to project folder
-          cd /home/jpablo67/Documents/Work/Inventory-Auto-Activate-Deactivate
-          
-          # Pull latest code
+          cd "$PROJECT_DIR"
           git fetch --all
           git checkout main
           git pull origin main
-          
-          # Rebuild and Deploy (Zero Downtime Build)
+
+      - name: Tag current image for rollback
+        run: |
+          # Capture the image the running container is using. If no container
+          # is running (first deploy after a crash), skip — nothing to roll back to.
+          CURRENT_IMAGE_ID=$(sudo docker inspect -f '{{.Image}}' "$APP_CONTAINER" 2>/dev/null || true)
+          if [ -n "$CURRENT_IMAGE_ID" ]; then
+            sudo docker tag "$CURRENT_IMAGE_ID" "$ROLLBACK_IMAGE"
+            echo "Tagged $CURRENT_IMAGE_ID as $ROLLBACK_IMAGE"
+          else
+            echo "No running container — skipping rollback tag (first deploy or recovery)"
+          fi
+
+      - name: Build and deploy
+        run: |
+          cd "$PROJECT_DIR"
           sudo docker compose up -d --build
-          
-          # Clean up
-          sudo docker image prune -f
+
+      - name: Health check
+        id: healthcheck
+        run: |
+          # Poll /health via the compose network until 200 or timeout.
+          DEADLINE=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
+          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+            CODE=$(sudo docker run --rm --network "$COMPOSE_NETWORK" \
+              curlimages/curl:latest -s -o /dev/null -w '%{http_code}' \
+              --max-time 5 "$HEALTH_URL" 2>/dev/null || echo "000")
+            if [ "$CODE" = "200" ]; then
+              echo "Health check passed (HTTP 200)"
+              exit 0
+            fi
+            echo "Health check returned $CODE — retrying in 3s"
+            sleep 3
+          done
+          echo "Health check never passed within ${HEALTH_TIMEOUT_SECONDS}s"
+          exit 1
+
+      - name: Rollback on failure
+        if: failure() && steps.healthcheck.conclusion == 'failure'
+        run: |
+          # Restore the previously-running image and re-up without rebuilding.
+          # If no rollback tag exists (first-ever deploy), this exits cleanly —
+          # the broken container stays, but there's nothing older to swap in.
+          if sudo docker image inspect "$ROLLBACK_IMAGE" >/dev/null 2>&1; then
+            cd "$PROJECT_DIR"
+            sudo docker tag "$ROLLBACK_IMAGE" "$APP_IMAGE"
+            sudo docker compose up -d --no-build --force-recreate
+            echo "Rolled back to previous image. Investigate the failure before retrying."
+          else
+            echo "No rollback image available — manual recovery required."
+          fi
+
+      - name: Prune dangling images
+        if: success()
+        run: sudo docker image prune -f

@@ -11,13 +11,8 @@ import {
     Banner,
     Badge,
 } from "@shopify/polaris";
-import shopify, {
-    STARTER_PLAN,
-    GROWTH_PLAN,
-    PRO_PLAN,
-    ALL_PLANS,
-    IS_TEST_BILLING,
-} from "../shopify.server";
+import { authenticate } from "../shopify.server";
+import { STARTER_PLAN, GROWTH_PLAN, PRO_PLAN, ALL_PLANS, IS_TEST_BILLING } from "../billing.constants";
 import { isFreeShop } from "../services/billing.server";
 import db from "../db.server";
 
@@ -30,7 +25,7 @@ interface PlanInfo {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-    const { session, billing, admin } = await shopify.authenticate.admin(request);
+    const { session, billing, admin } = await authenticate.admin(request);
     const shop = session.shop;
 
     if (isFreeShop(shop)) {
@@ -69,7 +64,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-    const { billing } = await shopify.authenticate.admin(request);
+    const { billing } = await authenticate.admin(request);
     const formData = await request.formData();
     const plan = formData.get("plan");
 

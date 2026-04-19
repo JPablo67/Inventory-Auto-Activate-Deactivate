@@ -15,9 +15,6 @@ jobs:
   validate:
     runs-on: self-hosted
     timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: inventory-deactivator
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,7 +24,6 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: inventory-deactivator/package-lock.json
 
       - name: Install dependencies
         run: npm ci

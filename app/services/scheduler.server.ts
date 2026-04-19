@@ -1,14 +1,12 @@
-import type { Settings } from "@prisma/client";
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import db from "../db.server";
 import {
-  scanOldProducts,
-  deactivateProducts,
   isDeactivationCandidate,
   type ShopifyGraphQLResponse,
   type ZeroStockProductsData,
   type ZeroStockProductNode,
-} from "./inventory.server";
+} from "./inventory-logic";
+import { shouldRun, computeNextRunAt } from "./scheduler-logic";
 import shopify from "../shopify.server";
 
 declare global {
@@ -116,23 +114,6 @@ async function runAutoScan() {
     } catch (error) {
         console.error("[Scheduler] Error in runAutoScan:", error);
     }
-}
-
-function shouldRun(settings: Settings, now: Date) {
-    if (!settings.isActive) return false;
-    // Cadence is anchored to nextRunAt, set on toggle ON and after each scan.
-    if (!settings.nextRunAt) return false;
-    return now >= new Date(settings.nextRunAt);
-}
-
-function computeNextRunAt(frequency: number, frequencyUnit: string, from: Date = new Date()): Date {
-    const next = new Date(from);
-    if (frequencyUnit === "minutes") {
-        next.setTime(next.getTime() + frequency * 60 * 1000);
-    } else {
-        next.setTime(next.getTime() + frequency * 24 * 60 * 60 * 1000);
-    }
-    return next;
 }
 
 async function executeScanForShop(shop: string, minDays: number) {

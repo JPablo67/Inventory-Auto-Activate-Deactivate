@@ -73,11 +73,15 @@ jobs:
           fi
 
       - name: Build and deploy
-        env:
-          SENTRY_RELEASE: ${{ github.sha }}
         run: |
           cd "$PROJECT_DIR"
-          sudo -E docker compose up -d --build
+          # Stamp the deploy SHA into .env so docker-compose can substitute it
+          # into the app container env (Sentry release tag). Sudoers blocks
+          # both `sudo -E` and `sudo VAR=val`, so .env is the reliable channel.
+          grep -v '^SENTRY_RELEASE=' .env > .env.tmp || true
+          echo "SENTRY_RELEASE=${{ github.sha }}" >> .env.tmp
+          mv .env.tmp .env
+          sudo docker compose up -d --build
 
       - name: Health check
         id: healthcheck

@@ -9,8 +9,8 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 
-export { STARTER_PLAN, GROWTH_PLAN, PRO_PLAN, ALL_PLANS, IS_TEST_BILLING } from "./billing.constants";
-import { STARTER_PLAN, GROWTH_PLAN, PRO_PLAN } from "./billing.constants";
+export { STARTER_PLAN, GROWTH_PLAN, PRO_PLAN, STARTER_PLAN_ANNUAL, GROWTH_PLAN_ANNUAL, PRO_PLAN_ANNUAL, ALL_PLANS, IS_TEST_BILLING } from "./billing.constants";
+import { STARTER_PLAN, GROWTH_PLAN, PRO_PLAN, STARTER_PLAN_ANNUAL, GROWTH_PLAN_ANNUAL, PRO_PLAN_ANNUAL } from "./billing.constants";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -54,6 +54,39 @@ const shopify = shopifyApp({
           amount: 9.99,
           currencyCode: "USD",
           interval: BillingInterval.Every30Days,
+        },
+      ],
+      trialDays: 15,
+      replacementBehavior: BillingReplacementBehavior.ApplyOnNextBillingCycle,
+    },
+    [STARTER_PLAN_ANNUAL]: {
+      lineItems: [
+        {
+          amount: 44.99,
+          currencyCode: "USD",
+          interval: BillingInterval.Annual,
+        },
+      ],
+      trialDays: 15,
+      replacementBehavior: BillingReplacementBehavior.ApplyOnNextBillingCycle,
+    },
+    [GROWTH_PLAN_ANNUAL]: {
+      lineItems: [
+        {
+          amount: 59.99,
+          currencyCode: "USD",
+          interval: BillingInterval.Annual,
+        },
+      ],
+      trialDays: 15,
+      replacementBehavior: BillingReplacementBehavior.ApplyOnNextBillingCycle,
+    },
+    [PRO_PLAN_ANNUAL]: {
+      lineItems: [
+        {
+          amount: 89.99,
+          currencyCode: "USD",
+          interval: BillingInterval.Annual,
         },
       ],
       trialDays: 15,

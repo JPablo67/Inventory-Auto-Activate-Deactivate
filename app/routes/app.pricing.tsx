@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
 import { useLoaderData, Form } from "@remix-run/react";
 import * as Sentry from "@sentry/remix";
@@ -13,17 +14,43 @@ import {
     Badge,
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
-import { STARTER_PLAN, GROWTH_PLAN, PRO_PLAN, ALL_PLANS, IS_TEST_BILLING } from "../billing.constants";
+import {
+    STARTER_PLAN, GROWTH_PLAN, PRO_PLAN,
+    STARTER_PLAN_ANNUAL, GROWTH_PLAN_ANNUAL, PRO_PLAN_ANNUAL,
+    ALL_PLANS, IS_TEST_BILLING,
+} from "../billing.constants";
 import { isFreeShop } from "../services/billing.server";
 import db from "../db.server";
 
-interface PlanInfo {
-    id: string;
-    name: string;
-    price: string;
-    productRange: string;
-    recommended: boolean;
-}
+const PLAN_DATA = [
+    {
+        baseName: "Starter",
+        monthlyId: STARTER_PLAN,
+        annualId: STARTER_PLAN_ANNUAL,
+        monthlyPrice: "$4.99",
+        annualPrice: "$44.99",
+        annualSavings: "Save $14.89 vs. monthly",
+        productRange: "For stores with under 500 products",
+    },
+    {
+        baseName: "Growth",
+        monthlyId: GROWTH_PLAN,
+        annualId: GROWTH_PLAN_ANNUAL,
+        monthlyPrice: "$6.99",
+        annualPrice: "$59.99",
+        annualSavings: "Save $23.89 vs. monthly",
+        productRange: "For stores with 500–999 products",
+    },
+    {
+        baseName: "Pro",
+        monthlyId: PRO_PLAN,
+        annualId: PRO_PLAN_ANNUAL,
+        monthlyPrice: "$9.99",
+        annualPrice: "$89.99",
+        annualSavings: "Save $29.89 vs. monthly",
+        productRange: "For stores with 1,000+ products",
+    },
+];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
     const { session, billing, admin } = await authenticate.admin(request);
@@ -40,10 +67,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
 
     const [billingResult, settings, productCount] = await Promise.all([
-        // Same fail-open posture as evaluateBilling: during a Shopify billing
-        // outage, render the plans anyway so merchants can still see what
-        // they'd get. Without current-plan info, the UI just won't show the
-        // "You're on X" banner or disable the current-plan button.
         billing
             .check({ plans: [...ALL_PLANS], isTest: IS_TEST_BILLING })
             .then((r) => ({ ok: true as const, ...r }))
@@ -84,14 +107,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const action = async ({ request }: ActionFunctionArgs) => {
     const { billing } = await authenticate.admin(request);
     const formData = await request.formData();
-    const plan = formData.get("plan");
+    const plan = formData.get("plan") as string;
 
-    if (plan !== STARTER_PLAN && plan !== GROWTH_PLAN && plan !== PRO_PLAN) {
+    if (!(ALL_PLANS as readonly string[]).includes(plan)) {
         return json({ error: "Invalid plan" }, { status: 400 });
     }
 
     await billing.request({
-        plan,
+        plan: plan as typeof ALL_PLANS[number],
         isTest: IS_TEST_BILLING,
     });
 
@@ -101,6 +124,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 export default function PricingPage() {
     const { isFree, productCount, currentPlan, gracePeriodEndsAt, billingUnavailable } =
         useLoaderData<typeof loader>();
+
+    const [interval, setInterval] = useState<"monthly" | "annual">(
+        currentPlan?.includes("Annual") ? "annual" : "monthly"
+    );
 
     if (isFree) {
         return (
@@ -115,31 +142,7 @@ export default function PricingPage() {
     }
 
     const recommended =
-        productCount < 500 ? STARTER_PLAN : productCount < 1000 ? GROWTH_PLAN : PRO_PLAN;
-
-    const plans: PlanInfo[] = [
-        {
-            id: STARTER_PLAN,
-            name: "Starter",
-            price: "$4.99",
-            productRange: "For stores with under 500 products",
-            recommended: recommended === STARTER_PLAN,
-        },
-        {
-            id: GROWTH_PLAN,
-            name: "Growth",
-            price: "$6.99",
-            productRange: "For stores with 500–999 products",
-            recommended: recommended === GROWTH_PLAN,
-        },
-        {
-            id: PRO_PLAN,
-            name: "Pro",
-            price: "$9.99",
-            productRange: "For stores with 1000+ products",
-            recommended: recommended === PRO_PLAN,
-        },
-    ];
+        productCount < 500 ? "Starter" : productCount < 1000 ? "Growth" : "Pro";
 
     return (
         <Page title="Choose your plan" subtitle="15-day free trial on every plan. Cancel anytime.">
@@ -167,49 +170,80 @@ export default function PricingPage() {
                         <p>Pick a different plan below to switch.</p>
                     </Banner>
                 )}
+
+                <InlineStack align="center" gap="200">
+                    <Button
+                        pressed={interval === "monthly"}
+                        variant={interval === "monthly" ? "primary" : "secondary"}
+                        onClick={() => setInterval("monthly")}
+                    >
+                        Monthly
+                    </Button>
+                    <Button
+                        pressed={interval === "annual"}
+                        variant={interval === "annual" ? "primary" : "secondary"}
+                        onClick={() => setInterval("annual")}
+                    >
+                        Annual · Save up to 28%
+                    </Button>
+                </InlineStack>
+
                 <Text as="p" variant="bodyMd">
                     Your store has approximately <b>{productCount.toLocaleString()}</b> products.
                 </Text>
+
                 <Layout>
-                    {plans.map((plan) => (
-                        <Layout.Section variant="oneThird" key={plan.id}>
-                            <Card>
-                                <BlockStack gap="300">
-                                    <InlineStack align="space-between" blockAlign="center">
-                                        <Text as="h2" variant="headingLg">
-                                            {plan.name}
+                    {PLAN_DATA.map((plan) => {
+                        const planId = interval === "annual" ? plan.annualId : plan.monthlyId;
+                        const isCurrentPlan = currentPlan === planId;
+                        const isRecommended = plan.baseName === recommended;
+
+                        return (
+                            <Layout.Section variant="oneThird" key={plan.baseName}>
+                                <Card>
+                                    <BlockStack gap="300">
+                                        <InlineStack align="space-between" blockAlign="center">
+                                            <Text as="h2" variant="headingLg">
+                                                {plan.baseName}
+                                            </Text>
+                                            {isRecommended && (
+                                                <Badge tone="success">Recommended</Badge>
+                                            )}
+                                        </InlineStack>
+                                        <Text as="p" variant="heading2xl">
+                                            {interval === "annual" ? plan.annualPrice : plan.monthlyPrice}
+                                            <Text as="span" variant="bodyMd" tone="subdued">
+                                                {interval === "annual" ? "/year" : "/month"}
+                                            </Text>
                                         </Text>
-                                        {plan.recommended && (
-                                            <Badge tone="success">Recommended</Badge>
+                                        {interval === "annual" && (
+                                            <Text as="p" variant="bodySm" tone="success">
+                                                {plan.annualSavings}
+                                            </Text>
                                         )}
-                                    </InlineStack>
-                                    <Text as="p" variant="heading2xl">
-                                        {plan.price}
-                                        <Text as="span" variant="bodyMd" tone="subdued">
-                                            /month
+                                        <Text as="p" tone="subdued">
+                                            {plan.productRange}
                                         </Text>
-                                    </Text>
-                                    <Text as="p" tone="subdued">
-                                        {plan.productRange}
-                                    </Text>
-                                    <Form method="post">
-                                        <input type="hidden" name="plan" value={plan.id} />
-                                        <Button
-                                            submit
-                                            variant={plan.recommended ? "primary" : "secondary"}
-                                            fullWidth
-                                            disabled={currentPlan === plan.id}
-                                        >
-                                            {currentPlan === plan.id
-                                                ? "Current plan"
-                                                : "Start 15-day free trial"}
-                                        </Button>
-                                    </Form>
-                                </BlockStack>
-                            </Card>
-                        </Layout.Section>
-                    ))}
+                                        <Form method="post">
+                                            <input type="hidden" name="plan" value={planId} />
+                                            <Button
+                                                submit
+                                                variant={isRecommended ? "primary" : "secondary"}
+                                                fullWidth
+                                                disabled={isCurrentPlan}
+                                            >
+                                                {isCurrentPlan
+                                                    ? "Current plan"
+                                                    : "Start 15-day free trial"}
+                                            </Button>
+                                        </Form>
+                                    </BlockStack>
+                                </Card>
+                            </Layout.Section>
+                        );
+                    })}
                 </Layout>
+
                 {IS_TEST_BILLING && (
                     <Banner tone="info">
                         <p>

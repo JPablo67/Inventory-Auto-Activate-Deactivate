@@ -10,7 +10,7 @@ vi.mock("../db.server", () => ({
 }));
 
 vi.mock("../shopify.server", () => ({
-    ALL_PLANS: ["Starter", "Growth", "Pro"] as const,
+    ALL_PLANS: ["Starter", "Growth", "Pro", "Starter Annual", "Growth Annual", "Pro Annual"] as const,
     IS_TEST_BILLING: true,
 }));
 

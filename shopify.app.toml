@@ -25,7 +25,7 @@ api_version = "2026-04"
   uri = "/webhooks/inventory/update"
 
   [[webhooks.subscriptions]]
-  topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
   uri = "/webhooks/privacy"
 
   [[webhooks.subscriptions]]

@@ -22,9 +22,10 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
+        <h1 className={styles.heading}>Auto Hide Out of Stock</h1>
         <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
+          Automatically move sold-out products to Draft and bring them back the
+          moment stock returns. Install from your Shopify admin to get started.
         </p>
         {showForm && (
           <Form className={styles.form} method="post" action="/auth/login">
@@ -40,16 +41,16 @@ export default function App() {
         )}
         <ul className={styles.list}>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Auto-hide sold-out products.</strong> Set a scan frequency
+            and days-inactive threshold — the app handles the rest.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Auto-reactivate on restock.</strong> The moment inventory
+            returns, the product flips back to Active automatically.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Full audit log.</strong> Every change is tagged, logged with
+            timestamp and method, and one-click reversible.
           </li>
         </ul>
       </div>

@@ -1,5 +1,6 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
 import { useLoaderData, Form } from "@remix-run/react";
+import * as Sentry from "@sentry/remix";
 import {
     Page,
     Layout,
@@ -34,11 +35,26 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             productCount: 0,
             currentPlan: null as string | null,
             gracePeriodEndsAt: null as string | null,
+            billingUnavailable: false,
         });
     }
 
-    const [{ hasActivePayment, appSubscriptions }, settings, productCount] = await Promise.all([
-        billing.check({ plans: [...ALL_PLANS], isTest: IS_TEST_BILLING }),
+    const [billingResult, settings, productCount] = await Promise.all([
+        // Same fail-open posture as evaluateBilling: during a Shopify billing
+        // outage, render the plans anyway so merchants can still see what
+        // they'd get. Without current-plan info, the UI just won't show the
+        // "You're on X" banner or disable the current-plan button.
+        billing
+            .check({ plans: [...ALL_PLANS], isTest: IS_TEST_BILLING })
+            .then((r) => ({ ok: true as const, ...r }))
+            .catch((error) => {
+                Sentry.withScope((scope) => {
+                    scope.setTag("shop", shop);
+                    scope.setContext("billing", { phase: "pricing-page-check" });
+                    Sentry.captureException(error);
+                });
+                return { ok: false as const, hasActivePayment: false, appSubscriptions: [] };
+            }),
         db.settings.findUnique({ where: { shop }, select: { gracePeriodEndsAt: true } }),
         admin
             .graphql(`{ productsCount { count } }`)
@@ -49,6 +65,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
             .catch(() => 0),
     ]);
 
+    const { ok: billingOk, hasActivePayment, appSubscriptions } = billingResult;
     const currentPlan = hasActivePayment ? appSubscriptions?.[0]?.name ?? null : null;
     const now = new Date();
     const graceEnds = settings?.gracePeriodEndsAt ?? null;
@@ -60,6 +77,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         productCount,
         currentPlan,
         gracePeriodEndsAt,
+        billingUnavailable: !billingOk,
     });
 };
 
@@ -81,7 +99,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function PricingPage() {
-    const { isFree, productCount, currentPlan, gracePeriodEndsAt } =
+    const { isFree, productCount, currentPlan, gracePeriodEndsAt, billingUnavailable } =
         useLoaderData<typeof loader>();
 
     if (isFree) {
@@ -126,6 +144,15 @@ export default function PricingPage() {
     return (
         <Page title="Choose your plan" subtitle="15-day free trial on every plan. Cancel anytime.">
             <BlockStack gap="400">
+                {billingUnavailable && (
+                    <Banner tone="warning" title="Billing service temporarily unavailable">
+                        <p>
+                            We couldn&apos;t reach Shopify&apos;s billing service. Your current
+                            subscription is not shown below, and starting a new plan may fail
+                            until the service recovers. Please try again in a few minutes.
+                        </p>
+                    </Banner>
+                )}
                 {gracePeriodEndsAt && (
                     <Banner tone="warning" title="Subscription grace period">
                         <p>

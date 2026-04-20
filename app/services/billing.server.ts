@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/remix";
 import db from "../db.server";
 import { ALL_PLANS, IS_TEST_BILLING } from "../shopify.server";
 
@@ -38,10 +39,25 @@ export async function evaluateBilling(
         return { allowed: true, reason: "free" };
     }
 
-    const { hasActivePayment } = await checker.check({
-        plans: ALL_PLANS,
-        isTest: IS_TEST_BILLING,
-    });
+    let hasActivePayment: boolean;
+    try {
+        const result = await checker.check({
+            plans: ALL_PLANS,
+            isTest: IS_TEST_BILLING,
+        });
+        hasActivePayment = result.hasActivePayment;
+    } catch (error) {
+        // Shopify's billing endpoint is unreachable. Fail open using the
+        // last-known-good state we persisted so paying merchants aren't
+        // locked out during a Shopify outage. Worst case: a never-subscribed
+        // shop gets temporary access that ends on the next successful check.
+        Sentry.withScope((scope) => {
+            scope.setTag("shop", shop);
+            scope.setContext("billing", { phase: "check", fallback: "persisted-state" });
+            Sentry.captureException(error);
+        });
+        return await fallbackGateFromPersistedState(shop, now);
+    }
 
     if (hasActivePayment) {
         await writeSubscriptionState(shop, "ACTIVE", null);
@@ -69,6 +85,27 @@ export async function evaluateBilling(
     // Grace window has elapsed — demote to NONE and clear the stale timestamp.
     await writeSubscriptionState(shop, "NONE", null);
     return { allowed: false, reason: "grace-expired" };
+}
+
+// Used when Shopify's billing endpoint is unreachable. Reads the last-known-good
+// state we wrote on a prior successful check and reconstructs a gate from it.
+// Always fails open: the cost of briefly serving a never-subscribed shop
+// during an outage is lower than locking out every paying merchant.
+async function fallbackGateFromPersistedState(shop: string, now: Date): Promise<BillingGate> {
+    const settings = await db.settings.findUnique({
+        where: { shop },
+        select: { subscriptionStatus: true, gracePeriodEndsAt: true },
+    });
+
+    if (
+        settings?.subscriptionStatus === "GRACE" &&
+        settings.gracePeriodEndsAt &&
+        now < settings.gracePeriodEndsAt
+    ) {
+        return { allowed: true, reason: "grace", gracePeriodEndsAt: settings.gracePeriodEndsAt };
+    }
+
+    return { allowed: true, reason: "active" };
 }
 
 // Writes status + grace in a single update so the scheduler never observes

@@ -2,6 +2,8 @@ import { IndexTable, Badge, Text, Thumbnail, InlineStack } from "@shopify/polari
 
 type BadgeTone = "success" | "critical" | "info" | "attention" | "magic";
 
+export type CurrentProductStatus = "ACTIVE" | "DRAFT" | "ARCHIVED" | "DELETED" | "UNKNOWN";
+
 export interface ActivityLogEntry {
     id: number | string;
     createdAt: Date | string;
@@ -11,6 +13,7 @@ export interface ActivityLogEntry {
     productSku: string | null;
     productTitle: string | null;
     productImageUrl: string | null;
+    currentStatus?: CurrentProductStatus | null;
 }
 
 interface ActivityLogTableProps {
@@ -21,6 +24,18 @@ interface ActivityLogTableProps {
     applyMethodFallback?: boolean;
     /** Render "Just Now" instead of "Invalid Date" — used by manual scan's optimistic rows whose timestamps round-trip through JSON. */
     handleInvalidDate?: boolean;
+    /** Render a "Current Status" column reflecting the product's live Shopify status. Caller must populate `currentStatus` on each entry. */
+    showCurrentStatus?: boolean;
+}
+
+function renderCurrentStatus(status: CurrentProductStatus | null | undefined) {
+    switch (status) {
+        case 'ACTIVE': return <Badge tone="success">Active</Badge>;
+        case 'DRAFT': return <Badge tone="info">Draft</Badge>;
+        case 'ARCHIVED': return <Badge>Archived</Badge>;
+        case 'DELETED': return <Badge tone="critical">Deleted</Badge>;
+        default: return <Badge>Unknown</Badge>;
+    }
 }
 
 export function ActivityLogTable({
@@ -28,6 +43,7 @@ export function ActivityLogTable({
     deactivatedLabel,
     applyMethodFallback = false,
     handleInvalidDate = false,
+    showCurrentStatus = false,
 }: ActivityLogTableProps) {
     return (
         <IndexTable
@@ -39,6 +55,7 @@ export function ActivityLogTable({
                 { title: 'Date & Time' },
                 { title: 'Action' },
                 { title: 'Method' },
+                ...(showCurrentStatus ? [{ title: 'Current Status' }] : []),
                 { title: 'SKU' },
                 { title: 'Name' },
                 { title: 'ID' },
@@ -89,6 +106,11 @@ export function ActivityLogTable({
                         <IndexTable.Cell>
                             <Badge tone={methodTone}>{methodLabel ?? ''}</Badge>
                         </IndexTable.Cell>
+                        {showCurrentStatus && (
+                            <IndexTable.Cell>
+                                {renderCurrentStatus(log.currentStatus)}
+                            </IndexTable.Cell>
+                        )}
                         <IndexTable.Cell>
                             <Text variant="bodySm" as="span" fontWeight="bold">{sku}</Text>
                         </IndexTable.Cell>

@@ -1,5 +1,6 @@
 import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useSubmit, useNavigation, useSearchParams, useNavigate } from "@remix-run/react";
+import * as Sentry from "@sentry/remix";
 import {
     Page,
     Layout,
@@ -12,12 +13,12 @@ import {
 } from "@shopify/polaris";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
-import { ActivityLogTable } from "../components/ActivityLogTable";
+import { ActivityLogTable, type CurrentProductStatus } from "../components/ActivityLogTable";
 
 const PAGE_SIZE = 50;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-    const { session } = await authenticate.admin(request);
+    const { session, admin } = await authenticate.admin(request);
     const url = new URL(request.url);
     const page = parseInt(url.searchParams.get("page") || "1", 10);
     const filter = url.searchParams.get("filter") || "all";
@@ -44,8 +45,53 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         take: PAGE_SIZE
     });
 
+    // Batch-fetch live product statuses so the table can show what's true *now*
+    // (status can change from other sources after we log an action). One
+    // `nodes` query covers all unique product IDs on the page.
+    const statusByProductId = new Map<string, CurrentProductStatus>();
+    let statusFetchFailed = false;
+    if (logs.length > 0) {
+        const uniqueIds = Array.from(new Set(logs.map((l) => l.productId)));
+        try {
+            const response = await admin.graphql(
+                `#graphql
+                query GetProductStatuses($ids: [ID!]!) {
+                    nodes(ids: $ids) {
+                        ... on Product {
+                            id
+                            status
+                        }
+                    }
+                }`,
+                { variables: { ids: uniqueIds } }
+            );
+            const result = (await response.json()) as {
+                data?: { nodes?: Array<{ id?: string; status?: string } | null> };
+            };
+            for (const node of result.data?.nodes ?? []) {
+                if (node?.id && node.status) {
+                    statusByProductId.set(node.id, node.status as CurrentProductStatus);
+                }
+            }
+        } catch (error) {
+            statusFetchFailed = true;
+            Sentry.withScope((scope) => {
+                scope.setTag("shop", session.shop);
+                scope.setContext("activity-log", { phase: "fetch-product-statuses" });
+                Sentry.captureException(error);
+            });
+        }
+    }
+
+    const logsWithStatus = logs.map((log) => ({
+        ...log,
+        currentStatus: statusFetchFailed
+            ? ("UNKNOWN" as CurrentProductStatus)
+            : statusByProductId.get(log.productId) ?? ("DELETED" as CurrentProductStatus),
+    }));
+
     return json({
-        logs,
+        logs: logsWithStatus,
         page,
         totalPages: Math.ceil(totalCount / PAGE_SIZE),
         totalCount
@@ -135,6 +181,7 @@ export default function ActivityLogPage() {
                                         logs={logs}
                                         deactivatedLabel="Changed to Draft"
                                         applyMethodFallback
+                                        showCurrentStatus
                                     />
 
                                     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem' }}>

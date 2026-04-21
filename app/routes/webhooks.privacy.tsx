@@ -28,6 +28,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             shop: request.headers.get("x-shopify-shop-domain"),
             webhookId: request.headers.get("x-shopify-webhook-id"),
             hasHmac: Boolean(request.headers.get("x-shopify-hmac-sha256")),
+            hmacPrefix: request.headers.get("x-shopify-hmac-sha256")?.slice(0, 10) ?? null,
+            contentType: request.headers.get("content-type"),
+            contentLength: request.headers.get("content-length"),
+            forwardedProto: request.headers.get("x-forwarded-proto"),
+            forwardedHost: request.headers.get("x-forwarded-host"),
             userAgent: request.headers.get("user-agent"),
             error: error instanceof Error ? error.message : String(error),
         });

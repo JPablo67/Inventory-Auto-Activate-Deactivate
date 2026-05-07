@@ -28,7 +28,7 @@ export default function App() {
           moment stock returns. Install from your Shopify admin to get started.
         </p>
         {showForm && (
-          <Form className={styles.form} method="post" action="/auth/login">
+          <Form className={styles.form} method="post" action="/auth/login" target="_top">
             <label className={styles.label}>
               <span>Shop domain</span>
               <input className={styles.input} type="text" name="shop" />

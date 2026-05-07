@@ -52,8 +52,8 @@ export default function Auth() {
               helpText="example.myshopify.com"
               value={shop}
               onChange={setShop}
-              autoComplete="on"
-              error={errors.shop}
+              autoComplete="off"
+              error={errors?.shop}
             />
             <Button submit>Log in</Button>
           </FormLayout>

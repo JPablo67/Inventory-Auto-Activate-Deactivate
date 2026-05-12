@@ -7,7 +7,7 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 
-export { STARTER_PLAN, GROWTH_PLAN, PRO_PLAN, STARTER_PLAN_ANNUAL, GROWTH_PLAN_ANNUAL, PRO_PLAN_ANNUAL, ALL_PLANS, IS_TEST_BILLING } from "./billing.constants";
+export { STARTER_PLAN, GROWTH_PLAN, PRO_PLAN, TEST_PLAN, ALL_PLANS, IS_TEST_BILLING } from "./billing.constants";
 
 // NOTE: This app uses Managed Pricing (configured in Partner Dashboard).
 // Plan definitions live there, not here — Shopify shows the plan picker on

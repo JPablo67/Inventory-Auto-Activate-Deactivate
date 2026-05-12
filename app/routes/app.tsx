@@ -1,5 +1,5 @@
 import { type HeadersFunction, type LoaderFunctionArgs } from "@remix-run/node";
-import { Form, Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
+import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
@@ -76,11 +76,11 @@ export default function App() {
                   Auto Hide Out of Stock needs an active subscription. Pick a
                   plan to start your 15-day free trial — cancel anytime.
                 </Text>
-                <Form method="get" action={managedPricingUrl} target="_top">
+                <form method="get" action={managedPricingUrl} target="_top">
                   <Button submit variant="primary">
                     View pricing plans
                   </Button>
-                </Form>
+                </form>
               </BlockStack>
             </EmptyState>
           </Card>
@@ -108,9 +108,9 @@ export default function App() {
               Your subscription has lapsed. Access will be suspended on{" "}
               {new Date(gracePeriodEndsAt).toLocaleString()}.
             </Text>
-            <Form method="get" action={managedPricingUrl} target="_top">
+            <form method="get" action={managedPricingUrl} target="_top">
               <Button submit>Choose a plan</Button>
-            </Form>
+            </form>
           </BlockStack>
         </Banner>
       )}

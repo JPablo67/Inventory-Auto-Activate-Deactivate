@@ -105,7 +105,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-    const { billing } = await authenticate.admin(request);
+    const { billing, admin } = await authenticate.admin(request);
     const formData = await request.formData();
     const plan = formData.get("plan") as string;
 
@@ -113,9 +113,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return json({ error: "Invalid plan" }, { status: 400 });
     }
 
+    // Shopify rejects non-test subscriptions on development stores with a
+    // userError, which the framework surfaces as a 500. Detect dev stores via
+    // shop.plan.partnerDevelopment and force isTest: true for them. Falls back
+    // to the build-time flag if the query fails so we never block billing.
+    let isTest = IS_TEST_BILLING;
+    try {
+        const res = await admin.graphql(
+            `{ shop { plan { partnerDevelopment shopifyPlus } } }`
+        );
+        const data = (await res.json()) as {
+            data?: { shop?: { plan?: { partnerDevelopment?: boolean } } };
+        };
+        if (data.data?.shop?.plan?.partnerDevelopment) {
+            isTest = true;
+        }
+    } catch {
+        // keep build-time default
+    }
+
     await billing.request({
         plan: plan as typeof ALL_PLANS[number],
-        isTest: IS_TEST_BILLING,
+        isTest,
     });
 
     return null;

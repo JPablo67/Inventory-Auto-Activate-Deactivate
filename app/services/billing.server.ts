@@ -51,6 +51,12 @@ export async function evaluateBilling(
             checker.check({ plans: ALL_PLANS, isTest: false }),
         ]);
         hasActivePayment = testResult.hasActivePayment || prodResult.hasActivePayment;
+        console.log("[Billing] gate check", {
+            shop,
+            test: { hasActivePayment: testResult.hasActivePayment },
+            prod: { hasActivePayment: prodResult.hasActivePayment },
+            allPlans: ALL_PLANS,
+        });
     } catch (error) {
         // Shopify's billing endpoint is unreachable. Fail open using the
         // last-known-good state we persisted so paying merchants aren't

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { type HeadersFunction, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
@@ -8,8 +9,8 @@ import {
   BlockStack,
   Button,
   Card,
-  EmptyState,
   Page,
+  Spinner,
   Text,
 } from "@shopify/polaris";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
@@ -62,27 +63,34 @@ export default function App() {
   const { apiKey, needsSubscription, gracePeriodEndsAt, managedPricingUrl } =
     useLoaderData<typeof loader>();
 
+  // No active subscription → jump straight to Shopify's hosted plan picker.
+  // Server-side redirect() would just load admin.shopify.com inside our iframe
+  // (blocked by X-Frame-Options), so the navigation has to happen client-side
+  // via window.top to escape the iframe.
+  useEffect(() => {
+    if (needsSubscription && typeof window !== "undefined" && window.top) {
+      window.top.location.href = managedPricingUrl;
+    }
+  }, [needsSubscription, managedPricingUrl]);
+
   if (needsSubscription) {
     return (
       <AppProvider isEmbeddedApp apiKey={apiKey}>
         <Page>
           <Card>
-            <EmptyState
-              heading="Choose a plan to get started"
-              image="https://cdn.shopify.com/s/files/1/0757/9955/files/empty-state.svg"
-            >
-              <BlockStack gap="400">
-                <Text as="p" variant="bodyMd">
-                  Auto Hide Out of Stock needs an active subscription. Pick a
-                  plan to start your 15-day free trial — cancel anytime.
-                </Text>
+            <BlockStack gap="400" inlineAlign="center">
+              <Spinner accessibilityLabel="Redirecting to plan selection" size="large" />
+              <Text as="p" tone="subdued">
+                Redirecting you to plan selection…
+              </Text>
+              <noscript>
                 <form method="get" action={managedPricingUrl} target="_top">
                   <Button submit variant="primary">
-                    View pricing plans
+                    Continue to plan selection
                   </Button>
                 </form>
-              </BlockStack>
-            </EmptyState>
+              </noscript>
+            </BlockStack>
           </Card>
         </Page>
       </AppProvider>

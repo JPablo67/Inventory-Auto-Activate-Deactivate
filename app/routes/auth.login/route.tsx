@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useLoaderData } from "@remix-run/react";
 import {
+  AppProvider as PolarisAppProvider,
   Button,
   Card,
   FormLayout,
@@ -10,6 +11,7 @@ import {
   TextField,
 } from "@shopify/polaris";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
+import polarisTranslations from "@shopify/polaris/locales/en.json";
 
 import { login } from "../../shopify.server";
 
@@ -38,27 +40,29 @@ export default function Auth() {
   const { errors } = actionData || loaderData;
 
   return (
-    <Page>
-      <Card>
-        <Form method="post" action="/auth/login" target="_top">
-          <FormLayout>
-            <Text variant="headingMd" as="h2">
-              Log in
-            </Text>
-            <TextField
-              type="text"
-              name="shop"
-              label="Shop domain"
-              helpText="example.myshopify.com"
-              value={shop}
-              onChange={setShop}
-              autoComplete="off"
-              error={errors?.shop}
-            />
-            <Button submit>Log in</Button>
-          </FormLayout>
-        </Form>
-      </Card>
-    </Page>
+    <PolarisAppProvider i18n={polarisTranslations}>
+      <Page>
+        <Card>
+          <Form method="post" action="/auth/login" target="_top">
+            <FormLayout>
+              <Text variant="headingMd" as="h2">
+                Log in
+              </Text>
+              <TextField
+                type="text"
+                name="shop"
+                label="Shop domain"
+                helpText="example.myshopify.com"
+                value={shop}
+                onChange={setShop}
+                autoComplete="off"
+                error={errors?.shop}
+              />
+              <Button submit>Log in</Button>
+            </FormLayout>
+          </Form>
+        </Card>
+      </Page>
+    </PolarisAppProvider>
   );
 }

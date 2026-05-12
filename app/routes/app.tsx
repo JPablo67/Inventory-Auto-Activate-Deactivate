@@ -25,7 +25,7 @@ export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 // navigation. We build the URL from the shop handle + the app handle (set
 // in Partner Dashboard → Distribution → App listing → URL handle).
 const APP_HANDLE =
-  process.env.SHOPIFY_APP_HANDLE || "auto-hide-out-of-stock";
+  process.env.SHOPIFY_APP_HANDLE || "auto-hide-out-of-stock-1";
 
 function buildManagedPricingUrl(shop: string): string {
   const shopHandle = shop.replace(/\.myshopify\.com$/, "");

@@ -1,41 +1,18 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
+import * as Sentry from "@sentry/remix";
 import { authenticate } from "../shopify.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+    // HMAC failures throw a Response; Remix forwards them as 401 — that's correct.
+    // We do not store customer PII, so there is no per-topic processing to do.
+    // Anything that throws below the auth step must NOT 5xx — Shopify will flag the app.
+    const { topic, shop } = await authenticate.webhook(request);
+
     try {
-        const { topic, shop, payload } = await authenticate.webhook(request);
-
-        // These webhooks are mandatory for the App Store.
-        // Since we do not store customer PII (Personally Identifiable Information) in our database,
-        // we just acknowledge the request.
-
-        switch (topic) {
-            case "CUSTOMERS_DATA_REQUEST":
-            case "CUSTOMERS_REDACT":
-            case "SHOP_REDACT":
-            default:
-                console.log(`[Privacy Webhook] Received ${topic} for shop ${shop}`);
-                // If we did store data, we would process 'payload' here.
-                break;
-        }
-
-        return new Response("OK", { status: 200 });
+        console.log(`[Privacy Webhook] Received ${topic} for shop ${shop}`);
     } catch (error) {
-        console.error("[Privacy Webhook] Verification failed", {
-            method: request.method,
-            url: request.url,
-            topic: request.headers.get("x-shopify-topic"),
-            shop: request.headers.get("x-shopify-shop-domain"),
-            webhookId: request.headers.get("x-shopify-webhook-id"),
-            hasHmac: Boolean(request.headers.get("x-shopify-hmac-sha256")),
-            hmacPrefix: request.headers.get("x-shopify-hmac-sha256")?.slice(0, 10) ?? null,
-            contentType: request.headers.get("content-type"),
-            contentLength: request.headers.get("content-length"),
-            forwardedProto: request.headers.get("x-forwarded-proto"),
-            forwardedHost: request.headers.get("x-forwarded-host"),
-            userAgent: request.headers.get("user-agent"),
-            error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
+        Sentry.captureException(error, { tags: { shop, webhook_topic: topic } });
     }
+
+    return new Response("OK", { status: 200 });
 };

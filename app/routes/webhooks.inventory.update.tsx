@@ -3,114 +3,144 @@ import * as Sentry from "@sentry/remix";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
+interface InventoryLevelPayload {
+    inventory_item_id?: number;
+    available?: number;
+}
+
+interface ProductLookupResult {
+    data?: {
+        inventoryItem?: {
+            variant?: {
+                sku?: string | null;
+                product?: {
+                    id: string;
+                    title: string;
+                    status: string;
+                    tags?: string[];
+                    featuredImage?: { url?: string | null } | null;
+                } | null;
+            } | null;
+        } | null;
+    };
+}
+
 export const action = async ({ request }: ActionFunctionArgs) => {
-    const { topic, shop, session, admin, payload } = await authenticate.webhook(request);
+    const webhookId = request.headers.get("x-shopify-webhook-id");
 
-    console.log(`[Webhook] Received ${topic} for shop ${shop}`);
+    try {
+        const { topic, shop, admin, payload } = await authenticate.webhook(request);
 
-    Sentry.getCurrentScope().setTag("shop", shop);
-    Sentry.getCurrentScope().setTag("webhook_topic", topic);
+        Sentry.getCurrentScope().setTag("shop", shop);
+        Sentry.getCurrentScope().setTag("webhook_topic", topic);
+        if (webhookId) Sentry.getCurrentScope().setTag("webhook_id", webhookId);
 
-    if (!admin) {
-        console.log("[Webhook] No admin context");
-        return new Response("OK", { status: 200 });
-    }
-
-    // Payload for inventory_levels/update:
-    // { inventory_item_id: 123, location_id: 456, available: 10, ... }
-    const { inventory_item_id, available } = payload as any;
-
-    console.log(`[Webhook] Inventory update: Item ${inventory_item_id}, Available ${available}`);
-
-    if (available && available > 0) {
-        // Stock returned!
-
-        // 1. Check if "Auto-Reactivation" is globally enabled for this shop
-        // We need to fetch settings. Authenticate webhook gives us 'shop' domain.
-        const settings = await db.settings.findUnique({ where: { shop } });
-
-        if (!settings?.autoReactivate) {
-            console.log(`[Webhook] Auto-Reactivation is OFF for ${shop}. Skipping.`);
+        if (!admin) {
             return new Response("OK", { status: 200 });
         }
 
-        // 2. We need to find the product associated with this inventory item.
-        const query = `
-        query findProduct($inventoryItemId: ID!) {
-            inventoryItem(id: $inventoryItemId) {
-                variant {
-                    sku
-                    product {
-                        id
-                        title
-                        status
-                        tags
-                        featuredImage { url }
+        const { inventory_item_id, available } = (payload ?? {}) as InventoryLevelPayload;
+
+        if (!available || available <= 0 || !inventory_item_id) {
+            return new Response("OK", { status: 200 });
+        }
+
+        const settings = await db.settings.findUnique({ where: { shop } });
+        if (!settings?.autoReactivate) {
+            return new Response("OK", { status: 200 });
+        }
+
+        const gid = `gid://shopify/InventoryItem/${inventory_item_id}`;
+        const lookupRes = await admin.graphql(
+            `query findProduct($inventoryItemId: ID!) {
+                inventoryItem(id: $inventoryItemId) {
+                    variant {
+                        sku
+                        product {
+                            id
+                            title
+                            status
+                            tags
+                            featuredImage { url }
+                        }
                     }
                 }
-            }
-        }
-     `;
+            }`,
+            { variables: { inventoryItemId: gid } }
+        );
+        const lookupJson = (await lookupRes.json()) as ProductLookupResult;
 
-        // Inventory Item ID in payload is usually just a number, but GraphQL needs GID
-        const gid = `gid://shopify/InventoryItem/${inventory_item_id}`;
-        console.log(`[Webhook] Querying product for Inventory Item GID: ${gid}`);
-
-        const response = await admin.graphql(query, { variables: { inventoryItemId: gid } });
-        const responseJson = await response.json();
-
-        console.log(`[Webhook] GraphQL Response: ${JSON.stringify(responseJson)}`);
-
-        const variant = responseJson.data?.inventoryItem?.variant;
+        const variant = lookupJson.data?.inventoryItem?.variant;
         const product = variant?.product;
-
         if (!product) {
-            console.log(`[Webhook] No product found for inventory item ${gid}. Skipping.`);
             return new Response("OK", { status: 200 });
         }
 
-        const hasNewTag = product.tags && product.tags.includes("auto-changed-draft");
-        const hasOldTag = product.tags && product.tags.includes("auto-archived-oos");
+        const tags = product.tags ?? [];
+        const hasReactivationTag =
+            tags.includes("auto-changed-draft") || tags.includes("auto-archived-oos");
+        if (!hasReactivationTag) {
+            return new Response("OK", { status: 200 });
+        }
 
-        if (hasNewTag || hasOldTag) {
-            console.log(`[Webhook] MATCH! Reactivating product ${product.title}`);
-
-            // Reactivate
-            const updateQuery = `
-            mutation reactivate($id: ID!, $tags: [String!]!) {
+        await admin.graphql(
+            `mutation reactivate($id: ID!, $tags: [String!]!) {
                 productChangeStatus(productId: $id, status: ACTIVE) {
                     userErrors { field message }
                 }
                 tagsRemove(id: $id, tags: $tags) {
                     userErrors { field message }
                 }
+            }`,
+            {
+                variables: {
+                    id: product.id,
+                    tags: ["auto-changed-draft", "auto-archived-oos"],
+                },
             }
-        `;
+        );
 
-            // Remove BOTH tags to be clean
-            const tagsToRemove = ["auto-changed-draft", "auto-archived-oos"];
-            const updateRes = await admin.graphql(updateQuery, { variables: { id: product.id, tags: tagsToRemove } });
-            const updateJson = await updateRes.json();
-            console.log(`[Webhook] Update Response: ${JSON.stringify(updateJson)}`);
-
-            // Log
+        // Idempotent log: webhookId is unique, so a retried delivery is a no-op.
+        // Falls back to plain create when the header is missing (won't happen in prod).
+        if (webhookId) {
+            await db.activityLog
+                .create({
+                    data: {
+                        shop,
+                        productId: product.id,
+                        productTitle: product.title,
+                        productSku: variant.sku ?? null,
+                        productImageUrl: product.featuredImage?.url ?? null,
+                        method: "WEBHOOK",
+                        action: "REACTIVATE",
+                        webhookId,
+                    },
+                })
+                .catch((err: unknown) => {
+                    // P2002 = unique constraint violation, expected on retries; swallow.
+                    const code = (err as { code?: string })?.code;
+                    if (code !== "P2002") throw err;
+                });
+        } else {
             await db.activityLog.create({
                 data: {
                     shop,
                     productId: product.id,
                     productTitle: product.title,
-                    productSku: variant.sku,
-                    productImageUrl: product.featuredImage?.url || null,
+                    productSku: variant.sku ?? null,
+                    productImageUrl: product.featuredImage?.url ?? null,
                     method: "WEBHOOK",
-                    action: "REACTIVATE"
-                }
+                    action: "REACTIVATE",
+                },
             });
-        } else {
-            console.log(`[Webhook] Product not found or tag missing. Tags: ${product?.tags}`);
         }
-    } else {
-        console.log("[Webhook] Stock is 0 or undefined, ignoring.");
-    }
 
-    return new Response("OK", { status: 200 });
+        return new Response("OK", { status: 200 });
+    } catch (error) {
+        // Never let Shopify see a 5xx: it retries aggressively and amplifies any bug.
+        // HMAC failures are thrown as Response objects by authenticate.webhook; let those surface.
+        if (error instanceof Response) throw error;
+        Sentry.captureException(error, { tags: { webhook_id: webhookId ?? "unknown" } });
+        return new Response("OK", { status: 200 });
+    }
 };

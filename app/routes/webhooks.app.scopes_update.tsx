@@ -10,16 +10,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     Sentry.getCurrentScope().setTag("shop", shop);
     Sentry.getCurrentScope().setTag("webhook_topic", topic);
 
-    const current = payload.current as string[];
+    const current = Array.isArray((payload as { current?: unknown }).current)
+        ? ((payload as { current: string[] }).current)
+        : [];
+
     if (session) {
-        await db.session.update({   
-            where: {
-                id: session.id
-            },
-            data: {
-                scope: current.toString(),
-            },
-        });
+        try {
+            await db.session.update({
+                where: { id: session.id },
+                data: { scope: current.join(",") },
+            });
+        } catch (err) {
+            Sentry.captureException(err, { tags: { shop, webhook_topic: topic } });
+        }
     }
     return new Response("OK", { status: 200 });
 };

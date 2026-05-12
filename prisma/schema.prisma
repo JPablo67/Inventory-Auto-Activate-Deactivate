@@ -42,6 +42,7 @@ model ActivityLog {
   productImageUrl String?
   method          String?  // "AUTO", "MANUAL", "WEBHOOK"
   action       String
+  webhookId    String?  @unique // x-shopify-webhook-id; lets us dedup webhook retries
   createdAt    DateTime @default(now())
 
   @@index([shop, createdAt])

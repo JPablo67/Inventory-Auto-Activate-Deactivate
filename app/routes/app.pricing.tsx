@@ -125,7 +125,7 @@ export default function PricingPage() {
     const { isFree, productCount, currentPlan, gracePeriodEndsAt, billingUnavailable } =
         useLoaderData<typeof loader>();
 
-    const [interval, setInterval] = useState<"monthly" | "annual">(
+    const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">(
         currentPlan?.includes("Annual") ? "annual" : "monthly"
     );
 
@@ -173,16 +173,16 @@ export default function PricingPage() {
 
                 <InlineStack align="center" gap="200">
                     <Button
-                        pressed={interval === "monthly"}
-                        variant={interval === "monthly" ? "primary" : "secondary"}
-                        onClick={() => setInterval("monthly")}
+                        pressed={billingInterval === "monthly"}
+                        variant={billingInterval === "monthly" ? "primary" : "secondary"}
+                        onClick={() => setBillingInterval("monthly")}
                     >
                         Monthly
                     </Button>
                     <Button
-                        pressed={interval === "annual"}
-                        variant={interval === "annual" ? "primary" : "secondary"}
-                        onClick={() => setInterval("annual")}
+                        pressed={billingInterval === "annual"}
+                        variant={billingInterval === "annual" ? "primary" : "secondary"}
+                        onClick={() => setBillingInterval("annual")}
                     >
                         Annual · Save up to 28%
                     </Button>
@@ -194,7 +194,7 @@ export default function PricingPage() {
 
                 <Layout>
                     {PLAN_DATA.map((plan) => {
-                        const planId = interval === "annual" ? plan.annualId : plan.monthlyId;
+                        const planId = billingInterval === "annual" ? plan.annualId : plan.monthlyId;
                         const isCurrentPlan = currentPlan === planId;
                         const isRecommended = plan.baseName === recommended;
 
@@ -211,12 +211,12 @@ export default function PricingPage() {
                                             )}
                                         </InlineStack>
                                         <Text as="p" variant="heading2xl">
-                                            {interval === "annual" ? plan.annualPrice : plan.monthlyPrice}
+                                            {billingInterval === "annual" ? plan.annualPrice : plan.monthlyPrice}
                                             <Text as="span" variant="bodyMd" tone="subdued">
-                                                {interval === "annual" ? "/year" : "/month"}
+                                                {billingInterval === "annual" ? "/year" : "/month"}
                                             </Text>
                                         </Text>
-                                        {interval === "annual" && (
+                                        {billingInterval === "annual" && (
                                             <Text as="p" variant="bodySm" tone="success">
                                                 {plan.annualSavings}
                                             </Text>

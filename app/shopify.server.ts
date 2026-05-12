@@ -3,15 +3,17 @@ import {
   ApiVersion,
   AppDistribution,
   shopifyApp,
-  BillingInterval,
-  BillingReplacementBehavior,
 } from "@shopify/shopify-app-remix/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 
 export { STARTER_PLAN, GROWTH_PLAN, PRO_PLAN, STARTER_PLAN_ANNUAL, GROWTH_PLAN_ANNUAL, PRO_PLAN_ANNUAL, ALL_PLANS, IS_TEST_BILLING } from "./billing.constants";
-import { STARTER_PLAN, GROWTH_PLAN, PRO_PLAN, STARTER_PLAN_ANNUAL, GROWTH_PLAN_ANNUAL, PRO_PLAN_ANNUAL } from "./billing.constants";
 
+// NOTE: This app uses Managed Pricing (configured in Partner Dashboard).
+// Plan definitions live there, not here — Shopify shows the plan picker on
+// the App Store listing and during the install flow. We can no longer call
+// billing.request(), but billing.check() still works to verify subscription
+// state (matching plan names in ALL_PLANS).
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
@@ -24,74 +26,6 @@ const shopify = shopifyApp({
   future: {
     unstable_newEmbeddedAuthStrategy: true,
     expiringOfflineAccessTokens: true,
-  },
-  billing: {
-    [STARTER_PLAN]: {
-      lineItems: [
-        {
-          amount: 4.99,
-          currencyCode: "USD",
-          interval: BillingInterval.Every30Days,
-        },
-      ],
-      trialDays: 15,
-      replacementBehavior: BillingReplacementBehavior.ApplyOnNextBillingCycle,
-    },
-    [GROWTH_PLAN]: {
-      lineItems: [
-        {
-          amount: 6.99,
-          currencyCode: "USD",
-          interval: BillingInterval.Every30Days,
-        },
-      ],
-      trialDays: 15,
-      replacementBehavior: BillingReplacementBehavior.ApplyOnNextBillingCycle,
-    },
-    [PRO_PLAN]: {
-      lineItems: [
-        {
-          amount: 9.99,
-          currencyCode: "USD",
-          interval: BillingInterval.Every30Days,
-        },
-      ],
-      trialDays: 15,
-      replacementBehavior: BillingReplacementBehavior.ApplyOnNextBillingCycle,
-    },
-    [STARTER_PLAN_ANNUAL]: {
-      lineItems: [
-        {
-          amount: 44.99,
-          currencyCode: "USD",
-          interval: BillingInterval.Annual,
-        },
-      ],
-      trialDays: 15,
-      replacementBehavior: BillingReplacementBehavior.ApplyOnNextBillingCycle,
-    },
-    [GROWTH_PLAN_ANNUAL]: {
-      lineItems: [
-        {
-          amount: 59.99,
-          currencyCode: "USD",
-          interval: BillingInterval.Annual,
-        },
-      ],
-      trialDays: 15,
-      replacementBehavior: BillingReplacementBehavior.ApplyOnNextBillingCycle,
-    },
-    [PRO_PLAN_ANNUAL]: {
-      lineItems: [
-        {
-          amount: 89.99,
-          currencyCode: "USD",
-          interval: BillingInterval.Annual,
-        },
-      ],
-      trialDays: 15,
-      replacementBehavior: BillingReplacementBehavior.ApplyOnNextBillingCycle,
-    },
   },
   ...(process.env.SHOP_CUSTOM_DOMAIN
     ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }

@@ -34,12 +34,40 @@ function buildManagedPricingUrl(shop: string): string {
 }
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session, billing } = await authenticate.admin(request);
+  const { session, billing, admin } = await authenticate.admin(request);
   const gate = await evaluateBilling(billing, session.shop);
 
   const apiKey = process.env.SHOPIFY_API_KEY || "";
 
   if (!gate.allowed) {
+    // Diagnostic: list every subscription on this shop so we can see why
+    // billing.check returned false. Includes status (ACTIVE/PENDING/etc.)
+    // and the actual plan name, which together explain plan-name mismatches
+    // and unapproved-charge cases. Wrap so a slow query never blocks the
+    // redirect to the plan picker. Remove once we're confident in the gate.
+    admin
+      .graphql(
+        `{
+          currentAppInstallation {
+            activeSubscriptions { id name status test }
+            allSubscriptions(first: 10) {
+              edges { node { id name status test createdAt } }
+            }
+          }
+        }`
+      )
+      .then(async (res) => {
+        const data = await res.json();
+        console.log(
+          "[Billing diag]",
+          session.shop,
+          JSON.stringify(data.data?.currentAppInstallation ?? data, null, 2)
+        );
+      })
+      .catch((err: unknown) => {
+        console.log("[Billing diag] failed:", err);
+      });
+
     return {
       apiKey,
       needsSubscription: true as const,

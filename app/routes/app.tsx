@@ -24,7 +24,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!isPricingRoute) {
     const gate = await evaluateBilling(billing, session.shop);
     if (!gate.allowed) {
-      throw redirect("/app/pricing");
+      // Preserve embedded-app params (host, shop, embedded, id_token, locale, etc.)
+      // so the pricing route loads as an embedded request. Dropping them sends
+      // the merchant through the framework's no-shop fallback to /auth/login,
+      // which then tries to load accounts.shopify.com inside the iframe and fails.
+      throw redirect(`/app/pricing${url.search}`);
     }
     if (gate.reason === "grace" && gate.gracePeriodEndsAt) {
       gracePeriodEndsAt = gate.gracePeriodEndsAt.toISOString();

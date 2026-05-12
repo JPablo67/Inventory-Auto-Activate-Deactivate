@@ -105,7 +105,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-    const { billing, admin } = await authenticate.admin(request);
+    const { billing, admin, session } = await authenticate.admin(request);
     const formData = await request.formData();
     const plan = formData.get("plan") as string;
 
@@ -132,10 +132,38 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         // keep build-time default
     }
 
-    await billing.request({
-        plan: plan as typeof ALL_PLANS[number],
-        isTest,
-    });
+    // Build a return URL the framework would otherwise auto-fill — log shows
+    // returnUrl as undefined and the framework's default can fail for embedded.
+    // After approval Shopify redirects the merchant here.
+    const reqUrl = new URL(request.url);
+    const host = reqUrl.searchParams.get("host") ?? "";
+    const appUrl = process.env.SHOPIFY_APP_URL ?? "";
+    const returnUrl = `${appUrl}/app?shop=${session.shop}&host=${host}&embedded=1`;
+
+    try {
+        await billing.request({
+            plan: plan as typeof ALL_PLANS[number],
+            isTest,
+            returnUrl,
+        });
+    } catch (error) {
+        // Surface what Shopify actually rejected. The framework wraps userErrors
+        // as a generic BillingError; without unpacking, the merchant sees "500".
+        const errorData = (error as { errorData?: unknown })?.errorData;
+        console.error("[Billing] request failed", {
+            shop: session.shop,
+            plan,
+            isTest,
+            returnUrl,
+            message: (error as Error)?.message,
+            errorData,
+        });
+        Sentry.captureException(error, {
+            tags: { shop: session.shop, plan, isTest: String(isTest) },
+            extra: { errorData, returnUrl },
+        });
+        throw error;
+    }
 
     return null;
 };

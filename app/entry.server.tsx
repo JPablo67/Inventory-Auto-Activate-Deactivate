@@ -23,7 +23,14 @@ if (process.env.SENTRY_DSN) {
 
 export const handleError = Sentry.sentryHandleError;
 
-initScheduler();
+// Only one replica should run the cron loop; the rest race on the same shops.
+// Default ON for single-replica deploys; set RUN_SCHEDULER=false on extra replicas.
+if (process.env.RUN_SCHEDULER !== "false") {
+  initScheduler();
+  console.log("[Scheduler] started on this instance");
+} else {
+  console.log("[Scheduler] disabled on this instance (RUN_SCHEDULER=false)");
+}
 
 export const streamTimeout = 5000;
 

@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/remix";
 import db from "../db.server";
-import { ALL_PLANS, IS_TEST_BILLING } from "../shopify.server";
+import { ALL_PLANS } from "../shopify.server";
 
 const GRACE_PERIOD_DAYS = 3;
 const GRACE_PERIOD_MS = GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
@@ -41,11 +41,16 @@ export async function evaluateBilling(
 
     let hasActivePayment: boolean;
     try {
-        const result = await checker.check({
-            plans: ALL_PLANS,
-            isTest: IS_TEST_BILLING,
-        });
-        hasActivePayment = result.hasActivePayment;
+        // Check test and non-test subscriptions in parallel. Dev stores
+        // (including App Store reviewer stores) always create test
+        // subscriptions via Managed Pricing; production stores create real
+        // ones. Querying both means we don't have to detect the shop type
+        // to gate correctly.
+        const [testResult, prodResult] = await Promise.all([
+            checker.check({ plans: ALL_PLANS, isTest: true }),
+            checker.check({ plans: ALL_PLANS, isTest: false }),
+        ]);
+        hasActivePayment = testResult.hasActivePayment || prodResult.hasActivePayment;
     } catch (error) {
         // Shopify's billing endpoint is unreachable. Fail open using the
         // last-known-good state we persisted so paying merchants aren't

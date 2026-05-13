@@ -181,6 +181,40 @@ export async function markSubscriptionActive(shop: string): Promise<void> {
     await writeSubscriptionState(shop, "ACTIVE", null);
 }
 
+// Returns true if Shopify reports any ACTIVE subscription on the current
+// app installation. Used by the app_subscriptions/update webhook to
+// distinguish a plan switch (old subscription CANCELLED while a new one
+// is ACTIVE) from a true subscription lapse. Without this check, every
+// plan upgrade would briefly drop the merchant into GRACE.
+interface AdminGraphQLContext {
+    graphql: (query: string) => Promise<Response>;
+}
+
+interface ActiveSubscriptionsResponse {
+    data?: {
+        currentAppInstallation?: {
+            activeSubscriptions?: Array<{
+                id?: string;
+                status?: string;
+            }>;
+        };
+    };
+}
+
+export async function hasAnyActiveSubscription(admin: unknown): Promise<boolean> {
+    const client = admin as AdminGraphQLContext;
+    const res = await client.graphql(`{
+        currentAppInstallation {
+            activeSubscriptions { id status }
+        }
+    }`);
+    const j = (await res.json()) as ActiveSubscriptionsResponse;
+    const subs = j.data?.currentAppInstallation?.activeSubscriptions ?? [];
+    // Filter by status defensively — the field name implies ACTIVE-only,
+    // but pinning the predicate here protects against future schema shifts.
+    return subs.some((s) => s.status === "ACTIVE");
+}
+
 // Used by the unauthenticated scheduler. Free shops always pass; paid shops
 // require an explicit ACTIVE status, or GRACE with the clock still inside
 // the window (belt-and-suspenders — the loader flips GRACE→NONE on expiry,

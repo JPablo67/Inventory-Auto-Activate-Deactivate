@@ -26,6 +26,7 @@ import db from "../db.server";
 import { __resetCacheForTests } from "./cache.server";
 import {
     evaluateBilling,
+    hasAnyActiveSubscription,
     isFreeShop,
     isSchedulerAllowed,
     markSubscriptionActive,
@@ -418,5 +419,78 @@ describe("billing gate cache", () => {
         const after = await evaluateBilling({ check }, "shop.myshopify.com", now);
         expect(after).toEqual({ allowed: true, reason: "active" });
         expect(check).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe("hasAnyActiveSubscription", () => {
+    const buildAdmin = (responseBody: unknown) => ({
+        graphql: vi.fn().mockResolvedValue({
+            json: () => Promise.resolve(responseBody),
+        }),
+    });
+
+    it("returns true when at least one ACTIVE subscription is present", async () => {
+        const admin = buildAdmin({
+            data: {
+                currentAppInstallation: {
+                    activeSubscriptions: [
+                        { id: "gid://shopify/AppSubscription/1", status: "ACTIVE" },
+                    ],
+                },
+            },
+        });
+        expect(await hasAnyActiveSubscription(admin)).toBe(true);
+    });
+
+    it("returns false when the activeSubscriptions array is empty", async () => {
+        const admin = buildAdmin({
+            data: { currentAppInstallation: { activeSubscriptions: [] } },
+        });
+        expect(await hasAnyActiveSubscription(admin)).toBe(false);
+    });
+
+    it("returns false when a subscription exists but is not ACTIVE (defensive)", async () => {
+        // currentAppInstallation.activeSubscriptions is documented as ACTIVE-only,
+        // but we filter defensively so a future schema shift can't silently
+        // let PENDING subscriptions be treated as active.
+        const admin = buildAdmin({
+            data: {
+                currentAppInstallation: {
+                    activeSubscriptions: [
+                        { id: "gid://shopify/AppSubscription/2", status: "PENDING" },
+                    ],
+                },
+            },
+        });
+        expect(await hasAnyActiveSubscription(admin)).toBe(false);
+    });
+
+    it("returns true when any subscription in the list is ACTIVE (plan-switch scenario)", async () => {
+        // Models the plan-switch race: the merchant has an old CANCELLED sub
+        // and a new ACTIVE one. Shopify only returns ACTIVE in this field,
+        // but if it ever included others, the check should still succeed.
+        const admin = buildAdmin({
+            data: {
+                currentAppInstallation: {
+                    activeSubscriptions: [
+                        { id: "gid://shopify/AppSubscription/old", status: "CANCELLED" },
+                        { id: "gid://shopify/AppSubscription/new", status: "ACTIVE" },
+                    ],
+                },
+            },
+        });
+        expect(await hasAnyActiveSubscription(admin)).toBe(true);
+    });
+
+    it("returns false when the GraphQL response is malformed (missing fields)", async () => {
+        const admin = buildAdmin({ data: {} });
+        expect(await hasAnyActiveSubscription(admin)).toBe(false);
+    });
+
+    it("propagates GraphQL errors so the webhook handler's catch can fail safe", async () => {
+        const admin = {
+            graphql: vi.fn().mockRejectedValue(new Error("Shopify 500")),
+        };
+        await expect(hasAnyActiveSubscription(admin)).rejects.toThrow("Shopify 500");
     });
 });

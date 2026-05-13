@@ -138,16 +138,18 @@ export default function SettingsPage() {
             return;
         }
 
-        // Anchor for the progress bar: prefer lastRunAt (post-first-scan), else
-        // derive the start of this interval from nextRunAt - one full frequency.
+        // The progress bar represents elapsed time within the CURRENT scheduling
+        // interval — always (nextRunAt - intervalMs) to nextRunAt. We deliberately
+        // don't use lastRunAt as the anchor: toggling auto-deactivate off and back
+        // on leaves lastRunAt stale (from a prior scan), which would inflate
+        // totalDuration and start the new progress bar at a non-zero value even
+        // though the user just enabled it fresh.
         const intervalMs = realtimeSettings.frequencyUnit === "days"
             ? realtimeSettings.frequency * 24 * 60 * 60 * 1000
             : realtimeSettings.frequency * 60 * 1000;
 
         const nextRun = new Date(realtimeSettings.nextRunAt).getTime();
-        const intervalStart = realtimeSettings.lastRunAt
-            ? new Date(realtimeSettings.lastRunAt).getTime()
-            : nextRun - intervalMs;
+        const intervalStart = nextRun - intervalMs;
 
         const tick = () => {
             const now = Date.now();

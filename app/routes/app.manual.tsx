@@ -62,7 +62,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const actionType = formData.get("actionType");
 
     if (actionType === "scan") {
-        const days = parseInt(formData.get("days") as string || "90", 10);
+        // Clamp at the server boundary: anything that bypasses the UI
+        // (curl, replayed form, browser dev tools) still gets a sane value.
+        const parsed = parseInt(formData.get("days") as string || "90", 10);
+        const days = Number.isFinite(parsed) ? Math.max(0, parsed) : 90;
         const candidates = await scanOldProducts(request, days);
 
         // Update Last Scan info
@@ -361,8 +364,20 @@ export default function ManualScanPage() {
                                     <TextField
                                         label="Days Inactive"
                                         type="number"
+                                        min={0}
+                                        step={1}
                                         value={daysThreshold}
-                                        onChange={(value) => setDaysThreshold(value)}
+                                        onChange={(value) => {
+                                            // Allow empty while typing, but
+                                            // reject negative and non-integer.
+                                            if (value === "") {
+                                                setDaysThreshold("");
+                                                return;
+                                            }
+                                            const parsed = parseInt(value, 10);
+                                            if (Number.isNaN(parsed)) return;
+                                            setDaysThreshold(Math.max(0, parsed).toString());
+                                        }}
                                         autoComplete="off"
                                         labelHidden
                                         placeholder="Threshold"

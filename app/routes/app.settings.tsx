@@ -46,12 +46,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const actionType = formData.get("actionType");
 
     if (actionType === "saveSettings") {
+        // Defensive clamping at the server boundary. The UI prevents negative
+        // and non-integer entries, but a replayed form / curl / dev-tools edit
+        // could still send anything.
+        const parsedFreq = parseInt(formData.get("frequency") as string, 10);
+        const frequency = Number.isFinite(parsedFreq) ? Math.max(1, parsedFreq) : 1;
+        const parsedDays = parseInt(formData.get("minDaysInactive") as string || "90", 10);
+        const minDaysInactive = Number.isFinite(parsedDays) ? Math.max(0, parsedDays) : 90;
+
         await saveAutoSettings({
             shop: session.shop,
             isActive: formData.get("isActive") === "true",
-            frequency: parseInt(formData.get("frequency") as string, 10),
+            frequency,
             frequencyUnit: formData.get("frequencyUnit") as string,
-            minDaysInactive: parseInt(formData.get("minDaysInactive") as string || "90", 10),
+            minDaysInactive,
         });
         return json({ success: true, savedSettings: true });
     }
@@ -269,8 +277,18 @@ export default function SettingsPage() {
                                         <TextField
                                             label="Products that have been out of stock for more than:"
                                             type="number"
+                                            min={0}
+                                            step={1}
                                             value={autoMinDays}
-                                            onChange={setAutoMinDays}
+                                            onChange={(value) => {
+                                                if (value === "") {
+                                                    setAutoMinDays("");
+                                                    return;
+                                                }
+                                                const parsed = parseInt(value, 10);
+                                                if (Number.isNaN(parsed)) return;
+                                                setAutoMinDays(Math.max(0, parsed).toString());
+                                            }}
                                             autoComplete="off"
                                             disabled={autoEnabled === 'true'}
                                             suffix="days"

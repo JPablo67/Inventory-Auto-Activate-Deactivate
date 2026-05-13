@@ -17,21 +17,9 @@ import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 import { authenticate } from "../shopify.server";
 import { evaluateBilling } from "../services/billing.server";
+import { buildManagedPricingUrl } from "../utils/managed-pricing.server";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
-
-// Managed Pricing: when the shop has no active subscription we send the
-// merchant to Shopify's hosted plan picker. The page lives under the admin
-// origin so the only way to reach it from inside our iframe is a top-level
-// navigation. We build the URL from the shop handle + the app handle (set
-// in Partner Dashboard → Distribution → App listing → URL handle).
-const APP_HANDLE =
-  process.env.SHOPIFY_APP_HANDLE || "auto-hide-out-of-stock-1";
-
-function buildManagedPricingUrl(shop: string): string {
-  const shopHandle = shop.replace(/\.myshopify\.com$/, "");
-  return `https://admin.shopify.com/store/${shopHandle}/charges/${APP_HANDLE}/pricing_plans`;
-}
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, billing, admin } = await authenticate.admin(request);
@@ -136,6 +124,7 @@ export default function App() {
         <Link to="/app/settings" prefetch="intent">Auto-Deactivate</Link>
         <Link to="/app/manual" prefetch="intent">Manual Scan</Link>
         <Link to="/app/tags" prefetch="intent">Bulk Tags</Link>
+        <Link to="/app/billing" prefetch="intent">Plan & Billing</Link>
       </NavMenu>
       {gracePeriodEndsAt && (
         <Banner tone="warning" title="Subscription needs attention">

@@ -128,14 +128,14 @@ export default function App() {
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <NavMenu>
-        <Link to="/app" rel="home">
+        <Link to="/app" rel="home" prefetch="intent">
           Auto Hide Out of Stock
         </Link>
-        <Link to="/app/dashboard">Homepage</Link>
-        <Link to="/app/activity">Activity Log</Link>
-        <Link to="/app/settings">Auto-Deactivate</Link>
-        <Link to="/app/manual">Manual Scan</Link>
-        <Link to="/app/tags">Bulk Tags</Link>
+        <Link to="/app/dashboard" prefetch="intent">Homepage</Link>
+        <Link to="/app/activity" prefetch="intent">Activity Log</Link>
+        <Link to="/app/settings" prefetch="intent">Auto-Deactivate</Link>
+        <Link to="/app/manual" prefetch="intent">Manual Scan</Link>
+        <Link to="/app/tags" prefetch="intent">Bulk Tags</Link>
       </NavMenu>
       {gracePeriodEndsAt && (
         <Banner tone="warning" title="Subscription needs attention">

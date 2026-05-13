@@ -386,7 +386,7 @@ export default function Index() {
   }, [autoEnabled, nextRun, typedSettings]);
 
   const renderStatusCard = (count: number, label: string, statusKey: string) => (
-    <RemixLink to={`?view=${statusKey}`} style={{ textDecoration: 'none' }}>
+    <RemixLink to={`?view=${statusKey}`} prefetch="intent" style={{ textDecoration: 'none' }}>
       <Card>
         <Box padding="400">
           <BlockStack>
@@ -478,7 +478,7 @@ export default function Index() {
           <button variant="breadcrumb" onClick={() => history.back()}>Dashboard</button>
         </TitleBar>
         <BlockStack gap="500">
-          <RemixLink to=".">← Back to Dashboard</RemixLink>
+          <RemixLink to="." prefetch="intent">← Back to Dashboard</RemixLink>
           <Card>
             <IndexTable
               resourceName={{ singular: 'product', plural: 'products' }}

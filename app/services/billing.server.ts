@@ -1,9 +1,22 @@
 import * as Sentry from "@sentry/remix";
 import db from "../db.server";
 import { ALL_PLANS } from "../shopify.server";
+import { getCached, setCached, invalidateCached } from "./cache.server";
 
 const GRACE_PERIOD_DAYS = 3;
 const GRACE_PERIOD_MS = GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+
+// 60s is long enough to absorb a burst of page navigations within a single
+// admin session (the main hot path), short enough that a missed webhook
+// only leaves stale state for a minute. Every state-changing path
+// (writeSubscriptionState, startGracePeriod) calls invalidateCached so
+// real changes propagate immediately for the merchant who triggered them.
+const GATE_CACHE_TTL_MS = 60_000;
+const gateCacheKey = (shop: string) => `billing-gate:${shop}`;
+
+export function invalidateBillingGate(shop: string): void {
+    invalidateCached(gateCacheKey(shop));
+}
 
 export type SubscriptionStatus = "ACTIVE" | "GRACE" | "NONE";
 
@@ -31,13 +44,27 @@ export async function evaluateBilling(
     shop: string,
     now: Date = new Date()
 ): Promise<BillingGate> {
-    const checker = billing as BillingChecker;
-
     if (isFreeShop(shop)) {
         // Free shops bypass all gating via isFreeShop() in every caller;
-        // status/grace fields are not written for them.
+        // status/grace fields are not written for them. Not cached because
+        // the check is already a cheap in-memory env-var lookup.
         return { allowed: true, reason: "free" };
     }
+
+    const cached = getCached<BillingGate>(gateCacheKey(shop));
+    if (cached) return cached;
+
+    const result = await computeBillingGate(billing, shop, now);
+    setCached(gateCacheKey(shop), result, GATE_CACHE_TTL_MS);
+    return result;
+}
+
+async function computeBillingGate(
+    billing: unknown,
+    shop: string,
+    now: Date
+): Promise<BillingGate> {
+    const checker = billing as BillingChecker;
 
     let hasActivePayment: boolean;
     try {
@@ -127,6 +154,9 @@ async function writeSubscriptionState(
         where: { shop },
         data: { subscriptionStatus: status, gracePeriodEndsAt },
     });
+    // The cached gate may reflect the old state; clear it so the next
+    // evaluateBilling call recomputes against fresh DB + Shopify data.
+    invalidateBillingGate(shop);
 }
 
 // Called by the app_subscriptions/update webhook on CANCELLED/EXPIRED/DECLINED/FROZEN.
@@ -139,7 +169,11 @@ export async function startGracePeriod(shop: string, now: Date = new Date()): Pr
         where: { shop, subscriptionStatus: { not: "GRACE" } },
         data: { subscriptionStatus: "GRACE", gracePeriodEndsAt: ends },
     });
-    return result.count > 0 ? ends : null;
+    if (result.count > 0) {
+        invalidateBillingGate(shop);
+        return ends;
+    }
+    return null;
 }
 
 // Called on ACTIVE webhook: promote to ACTIVE and clear any grace timestamp.

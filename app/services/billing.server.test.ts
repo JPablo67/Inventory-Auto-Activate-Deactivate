@@ -23,6 +23,7 @@ vi.mock("@sentry/remix", () => ({
 
 import * as Sentry from "@sentry/remix";
 import db from "../db.server";
+import { __resetCacheForTests } from "./cache.server";
 import {
     evaluateBilling,
     isFreeShop,
@@ -42,6 +43,7 @@ const mockedDb = db as unknown as MockedDb;
 beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.FREE_TIER_SHOPS;
+    __resetCacheForTests();
 });
 
 describe("isFreeShop", () => {

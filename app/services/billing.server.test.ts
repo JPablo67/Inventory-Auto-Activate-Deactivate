@@ -304,3 +304,119 @@ describe("markSubscriptionActive", () => {
         });
     });
 });
+
+describe("billing gate cache", () => {
+    const now = new Date("2026-04-19T12:00:00Z");
+
+    it("returns the cached gate on the second call without re-hitting Shopify", async () => {
+        const check = vi.fn().mockResolvedValue({ hasActivePayment: true });
+        mockedDb.settings.updateMany.mockResolvedValue({ count: 1 });
+
+        const first = await evaluateBilling({ check }, "cached.myshopify.com", now);
+        const second = await evaluateBilling({ check }, "cached.myshopify.com", now);
+
+        expect(first).toEqual({ allowed: true, reason: "active" });
+        expect(second).toEqual({ allowed: true, reason: "active" });
+        // Two billing.check calls in the first invocation (test + prod),
+        // zero on the second — the cache short-circuits entirely.
+        expect(check).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not cache free shops (every call goes through isFreeShop)", async () => {
+        process.env.FREE_TIER_SHOPS = "free.myshopify.com";
+        const check = vi.fn();
+
+        const first = await evaluateBilling({ check }, "free.myshopify.com", now);
+        const second = await evaluateBilling({ check }, "free.myshopify.com", now);
+
+        expect(first).toEqual({ allowed: true, reason: "free" });
+        expect(second).toEqual({ allowed: true, reason: "free" });
+        // Free shops short-circuit before the cache and before billing.check.
+        expect(check).not.toHaveBeenCalled();
+    });
+
+    it("keeps each shop's gate isolated in the cache", async () => {
+        const check = vi
+            .fn()
+            .mockResolvedValueOnce({ hasActivePayment: true })  // shop A test
+            .mockResolvedValueOnce({ hasActivePayment: true })  // shop A prod
+            .mockResolvedValueOnce({ hasActivePayment: false }) // shop B test
+            .mockResolvedValueOnce({ hasActivePayment: false }); // shop B prod
+        mockedDb.settings.findUnique.mockResolvedValue({ gracePeriodEndsAt: null });
+        mockedDb.settings.updateMany.mockResolvedValue({ count: 1 });
+
+        const a = await evaluateBilling({ check }, "a.myshopify.com", now);
+        const b = await evaluateBilling({ check }, "b.myshopify.com", now);
+
+        expect(a).toEqual({ allowed: true, reason: "active" });
+        expect(b).toEqual({ allowed: false, reason: "no-subscription" });
+    });
+
+    it("invalidates on markSubscriptionActive so the next call recomputes", async () => {
+        // 1. First call seeds cache as no-subscription (active payment = false).
+        const check = vi
+            .fn()
+            .mockResolvedValueOnce({ hasActivePayment: false })
+            .mockResolvedValueOnce({ hasActivePayment: false })
+            // 2. After invalidation, recompute sees active payment = true.
+            .mockResolvedValueOnce({ hasActivePayment: true })
+            .mockResolvedValueOnce({ hasActivePayment: true });
+        mockedDb.settings.findUnique.mockResolvedValue({ gracePeriodEndsAt: null });
+        mockedDb.settings.updateMany.mockResolvedValue({ count: 1 });
+
+        const before = await evaluateBilling({ check }, "subscriber.myshopify.com", now);
+        expect(before).toEqual({ allowed: false, reason: "no-subscription" });
+
+        // Simulates the app_subscriptions/update webhook landing.
+        await markSubscriptionActive("subscriber.myshopify.com");
+
+        const after = await evaluateBilling({ check }, "subscriber.myshopify.com", now);
+        expect(after).toEqual({ allowed: true, reason: "active" });
+        // 4 check calls total: 2 for the first evaluate, 2 for the second
+        // (cache was invalidated). If invalidation were broken, this would be 2.
+        expect(check).toHaveBeenCalledTimes(4);
+    });
+
+    it("invalidates on startGracePeriod (only when the row actually changed)", async () => {
+        const check = vi
+            .fn()
+            .mockResolvedValueOnce({ hasActivePayment: true })
+            .mockResolvedValueOnce({ hasActivePayment: true })
+            .mockResolvedValueOnce({ hasActivePayment: false })
+            .mockResolvedValueOnce({ hasActivePayment: false });
+        const future = new Date("2026-04-22T12:00:00Z");
+        mockedDb.settings.findUnique.mockResolvedValue({ gracePeriodEndsAt: future });
+        mockedDb.settings.updateMany.mockResolvedValue({ count: 1 });
+
+        const before = await evaluateBilling({ check }, "lapser.myshopify.com", now);
+        expect(before).toEqual({ allowed: true, reason: "active" });
+
+        // Simulates the CANCELLED webhook arriving and starting the grace window.
+        await startGracePeriod("lapser.myshopify.com", now);
+
+        const after = await evaluateBilling({ check }, "lapser.myshopify.com", now);
+        // Recompute sees no active payment but a valid grace timestamp.
+        expect(after).toEqual({ allowed: true, reason: "grace", gracePeriodEndsAt: future });
+        expect(check).toHaveBeenCalledTimes(4);
+    });
+
+    it("does NOT invalidate on a no-op startGracePeriod (duplicate webhook)", async () => {
+        const check = vi
+            .fn()
+            .mockResolvedValueOnce({ hasActivePayment: true })
+            .mockResolvedValueOnce({ hasActivePayment: true });
+        mockedDb.settings.updateMany.mockResolvedValueOnce({ count: 1 });
+
+        await evaluateBilling({ check }, "shop.myshopify.com", now);
+
+        // Duplicate webhook arrives — already in GRACE, updateMany returns 0.
+        mockedDb.settings.updateMany.mockResolvedValueOnce({ count: 0 });
+        await startGracePeriod("shop.myshopify.com", now);
+
+        // Cache should NOT have been invalidated — the second evaluate
+        // returns the cached "active" without re-querying Shopify.
+        const after = await evaluateBilling({ check }, "shop.myshopify.com", now);
+        expect(after).toEqual({ allowed: true, reason: "active" });
+        expect(check).toHaveBeenCalledTimes(2);
+    });
+});

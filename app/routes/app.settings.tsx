@@ -75,9 +75,14 @@ export default function SettingsPage() {
     const revalidator = useRevalidator();
 
     const [isRunning, setIsRunning] = useState(false);
+    // Scan-due bridges the window between the countdown hitting 0 and the
+    // server actually marking the scan as in-progress. Without it the UI
+    // would show "Pending..." for up to ~15s before the next poll catches
+    // currentStatus = "Running Scan...".
+    const [isScanDue, setIsScanDue] = useState(false);
     const { data: statusData } = useAuthenticatedPoll<{ settings?: any; latestLogId?: number; currentStatus?: string }>({
         url: '/api/status',
-        intervalMs: isRunning ? 3000 : 15000,
+        intervalMs: (isRunning || isScanDue) ? 2000 : 15000,
     });
 
     const realtimeSettings = { ...settings, ...(statusData?.settings || {}) };
@@ -135,6 +140,7 @@ export default function SettingsPage() {
         if (!realtimeSettings?.isActive || !realtimeSettings?.nextRunAt) {
             setTimeLeft(null);
             setProgress(0);
+            setIsScanDue(false);
             return;
         }
 
@@ -157,9 +163,14 @@ export default function SettingsPage() {
             const totalDuration = nextRun - intervalStart;
 
             if (diff <= 0) {
-                setTimeLeft("Pending...");
+                // Don't show "Pending..." — the UI swaps to the spinner via
+                // isScanDue. Keep timeLeft populated as a no-op string so the
+                // render guard `(timeLeft || isRunning)` still passes.
+                setTimeLeft("");
+                setIsScanDue(true);
                 setProgress(100);
             } else {
+                setIsScanDue(false);
                 const p = Math.max(0, Math.min(100, ((totalDuration - diff) / totalDuration) * 100));
                 setProgress(p);
 
@@ -244,23 +255,25 @@ export default function SettingsPage() {
                             </InlineStack>
 
                             {/* Timer Display */}
-                            {(timeLeft || isRunning) && autoEnabled === 'true' && (
+                            {(timeLeft || isRunning || isScanDue) && autoEnabled === 'true' && (
                                 <div style={{ background: "var(--p-color-bg-surface-secondary)", borderRadius: "8px", padding: "12px", border: "1px solid var(--p-color-border)" }}>
                                     <BlockStack gap="200">
                                         <InlineStack align="space-between">
                                             <Text as="span" variant="bodySm" tone="subdued">
-                                                {isRunning ? "Current Status" : "Next Scheduled Run"}
+                                                {(isRunning || isScanDue) ? "Current Status" : "Next Scheduled Run"}
                                             </Text>
-                                            {isRunning ? (
+                                            {(isRunning || isScanDue) ? (
                                                 <InlineStack gap="200" blockAlign="center">
                                                     <Spinner size="small" />
-                                                    <Text as="span" variant="bodySm" fontWeight="bold" tone="success">{currentStatus}</Text>
+                                                    <Text as="span" variant="bodySm" fontWeight="bold" tone="success">
+                                                        {isRunning ? currentStatus : "Starting scan..."}
+                                                    </Text>
                                                 </InlineStack>
                                             ) : (
                                                 <Text as="span" variant="bodySm" fontWeight="bold">{timeLeft}</Text>
                                             )}
                                         </InlineStack>
-                                        {!isRunning && (
+                                        {!(isRunning || isScanDue) && (
                                             <div style={{ height: '4px', background: 'var(--p-color-bg-surface-tertiary)', borderRadius: '2px', overflow: 'hidden' }}>
                                                 <div style={{ width: `${progress}%`, height: '100%', background: 'var(--p-color-bg-fill-success)', transition: 'width 1s linear' }} />
                                             </div>

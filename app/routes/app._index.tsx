@@ -516,7 +516,7 @@ export default function Index() {
   // DASHBOARD VIEW
   return (
     <Page fullWidth>
-      <TitleBar title="Auto Hide Our Of Stock" />
+      <TitleBar title="Auto Hide Out of Stock" />
       <BlockStack gap="500">
 
         {/* Metrics Banner */}
